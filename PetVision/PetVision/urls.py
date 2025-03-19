@@ -17,10 +17,11 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path
-from pets.views import pets
-# from PetVision.views import landing_page
+from pets.views import pets, training, prediction
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("", pets),
+    path("", pets, name="landing_page"),
+    path("training/", training, name="training_page"),
+    path("prediction/", prediction, name="prediction_page"),
 ]
