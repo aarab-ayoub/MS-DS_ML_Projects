@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PetVision AI - Classification</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .drop-zone {
+      border: 2px dashed #6b7280;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    .drop-zone.dragover {
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-900 via-purple-800 to-pink-700 min-h-screen text-white">
+  <div class="container mx-auto px-4 py-8">
+    <!-- Header -->
+    <header class="flex flex-col md:flex-row items-center justify-between mb-12">
+      <div class="flex items-center">
+        <div class="bg-white rounded-full p-2 mr-3 shadow-lg">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+          </svg>
+        </div>
+        <h1 class="text-3xl md:text-4xl font-bold text-white">PetVision AI</h1>
+      </div>
+      <nav class="mt-4 md:mt-0">
+		<ul class="flex space-x-6">
+		  <li>
+			<a href="{% url 'landing_page' %}" class="text-white hover:text-pink-200 font-medium">Home</a>
+		  </li>
+		  <li>
+			<a href="{% url 'training_page' %}" class="text-white hover:text-pink-200 font-medium">Try It</a>
+		  </li>
+		  <li>
+			<a href="{% url 'prediction_page' %}" class="text-white hover:text-pink-200 font-medium">Prediction</a>
+		  </li>
+		</ul>
+	  </nav>
+    </header>
+
+    <!-- Classification Section -->
+    <section class="mb-12">
+      <h2 class="text-3xl font-bold text-center text-white mb-8">Classify Your Image</h2>
+      <div class="drop-zone" id="classify-drop-zone">
+        <p class="text-indigo-200">Drag and drop an image here to classify it</p>
+        <input type="file" id="classify-input" accept="image/*" class="hidden">
+      </div>
+      <div id="result" class="mt-8 text-center text-2xl font-bold text-white"></div>
+    </section>
+  </div>
+
+  <script>
+    // Drag-and-Drop Functionality
+    const classifyDropZone = document.getElementById('classify-drop-zone');
+    const classifyInput = document.getElementById('classify-input');
+    const resultDiv = document.getElementById('result');
+
+    classifyDropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      classifyDropZone.classList.add('dragover');
+    });
+    classifyDropZone.addEventListener('dragleave', () => {
+      classifyDropZone.classList.remove('dragover');
+    });
+    classifyDropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      classifyDropZone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      classifyImage(file);
+    });
+
+    classifyInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      classifyImage(file);
+    });
+
+    // Simulate Classification
+    function classifyImage(file) {
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.src = e.target.result;
+          img.onload = () => {
+            // Simulate AI classification (random for now)
+            const isCat = Math.random() > 0.5;
+            const confidence = (Math.random() * 100).toFixed(2);
+            resultDiv.innerHTML = `This is a <span class="text-yellow-300">${isCat ? 'Cat' : 'Dog'}</span> with <span class="text-blue-300">${confidence}%</span> confidence!`;
+          };
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  </script>
+</body>
+</html>
