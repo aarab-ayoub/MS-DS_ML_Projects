@@ -67,23 +67,39 @@
     </header>
 
     <!-- Dataset Section -->
-    <section class="mb-12">
-      <h2 class="text-3xl font-bold text-center text-white mb-8">Dataset Gallery</h2>
-      <div class="image-grid">
-        <!-- Cat Images -->
-        <img src="https://source.unsplash.com/random/150x150/?cat" alt="Cat" class="rounded-lg shadow-lg">
-        <img src="https://source.unsplash.com/random/150x150/?cat" alt="Cat" class="rounded-lg shadow-lg">
-        <img src="https://source.unsplash.com/random/150x150/?cat" alt="Cat" class="rounded-lg shadow-lg">
-        <img src="https://source.unsplash.com/random/150x150/?cat" alt="Cat" class="rounded-lg shadow-lg">
-        <img src="https://source.unsplash.com/random/150x150/?cat" alt="Cat" class="rounded-lg shadow-lg">
-        <!-- Dog Images -->
-        <img src="https://source.unsplash.com/random/150x150/?dog" alt="Dog" class="rounded-lg shadow-lg">
-        <img src="https://source.unsplash.com/random/150x150/?dog" alt="Dog" class="rounded-lg shadow-lg">
-        <img src="https://source.unsplash.com/random/150x150/?dog" alt="Dog" class="rounded-lg shadow-lg">
-        <img src="https://source.unsplash.com/random/150x150/?dog" alt="Dog" class="rounded-lg shadow-lg">
-        <img src="https://source.unsplash.com/random/150x150/?dog" alt="Dog" class="rounded-lg shadow-lg">
+    <section class="mb-12 px-6">
+      <h2 class="text-4xl font-extrabold text-center text-white mb-12">Dataset Gallery</h2>
+      
+      <div class="max-w-6xl mx-auto">
+        <!-- Cats & Dogs Container -->
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+          
+          <!-- Cat Images -->
+          {% for image in cat_images %}
+          <div class="relative overflow-hidden rounded-xl shadow-lg group">
+            <img src="{{ MEDIA_URL }}cats/{{ image }}" alt="Cat"
+              class="w-full h-48 object-cover rounded-xl transition-all duration-300 group-hover:scale-105">
+            <div class="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-lg font-semibold transition-opacity">
+              Cat 🐱
+            </div>
+          </div>
+          {% endfor %}
+          
+          <!-- Dog Images -->
+          {% for image in dog_images %}
+          <div class="relative overflow-hidden rounded-xl shadow-lg group">
+            <img src="{{ MEDIA_URL }}dogs/{{ image }}" alt="Dog"
+              class="w-full h-48 object-cover rounded-xl transition-all duration-300 group-hover:scale-105">
+            <div class="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-lg font-semibold transition-opacity">
+              Dog 🐶
+            </div>
+          </div>
+          {% endfor %}
+          
+        </div>
       </div>
     </section>
+    
 
     <!-- Drag-and-Drop Form -->
     <section class="mb-12">
@@ -116,12 +132,35 @@
   </div>
 
   <script>
-    // Drag-and-Drop Functionality
     const catDropZone = document.getElementById('cat-drop-zone');
     const dogDropZone = document.getElementById('dog-drop-zone');
     const catInput = document.getElementById('cat-input');
     const dogInput = document.getElementById('dog-input');
     const loadingOverlay = document.getElementById('loading-overlay');
+
+    // Function to display uploaded images
+    function displayUploadedImages(files, dropZone) {
+      let previewContainer = dropZone.querySelector('.preview-container');
+
+      // If no preview container exists, create one
+      if (!previewContainer) {
+        previewContainer = document.createElement('div');
+        previewContainer.classList.add('flex', 'flex-wrap', 'gap-4', 'mt-4', 'preview-container');
+        dropZone.appendChild(previewContainer);
+      }
+
+      Array.from(files).forEach((file) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = document.createElement('img');
+          img.src = e.target.result;
+          img.alt = file.name;
+          img.classList.add('h-24', 'w-24', 'object-cover', 'rounded-lg', 'shadow-lg');
+          previewContainer.appendChild(img);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
 
     // Handle Drag-and-Drop for Cats
     catDropZone.addEventListener('dragover', (e) => {
@@ -134,8 +173,13 @@
     catDropZone.addEventListener('drop', (e) => {
       e.preventDefault();
       catDropZone.classList.remove('dragover');
-      catInput.files = e.dataTransfer.files;
-      alert(`${e.dataTransfer.files.length} cat images uploaded!`);
+      const files = e.dataTransfer.files;
+      if (files.length > 10) {
+        alert('You can only upload up to 10 cat images at a time.');
+        return;
+      }
+      displayUploadedImages(files, catDropZone);
+      alert(`${files.length} cat images uploaded!`);
     });
 
     // Handle Drag-and-Drop for Dogs
@@ -149,10 +193,16 @@
     dogDropZone.addEventListener('drop', (e) => {
       e.preventDefault();
       dogDropZone.classList.remove('dragover');
-      dogInput.files = e.dataTransfer.files;
-      alert(`${e.dataTransfer.files.length} dog images uploaded!`);
+      const files = e.dataTransfer.files;
+      if (files.length > 10) {
+        alert('You can only upload up to 10 dog images at a time.');
+        return;
+      }
+      displayUploadedImages(files, dogDropZone);
+      alert(`${files.length} dog images uploaded!`);
     });
 
+    // Handle Training Button Click
     document.getElementById('train-button').addEventListener('click', () => {
       loadingOverlay.style.display = 'flex'; // Show loading overlay
       setTimeout(() => {

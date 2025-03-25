@@ -67,36 +67,84 @@
       e.preventDefault();
       classifyDropZone.classList.add('dragover');
     });
+
     classifyDropZone.addEventListener('dragleave', () => {
       classifyDropZone.classList.remove('dragover');
     });
+
     classifyDropZone.addEventListener('drop', (e) => {
       e.preventDefault();
       classifyDropZone.classList.remove('dragover');
       const file = e.dataTransfer.files[0];
-      classifyImage(file);
+      if (file) {
+        displayUploadedImage(file);
+        startPrediction(file);
+      }
     });
 
     classifyInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
-      classifyImage(file);
+      if (file) {
+        displayUploadedImage(file);
+        startPrediction(file);
+      }
     });
 
-    // Simulate Classification
-    function classifyImage(file) {
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const img = new Image();
-          img.src = e.target.result;
-          img.onload = () => {
-            // Simulate AI classification (random for now)
-            const isCat = Math.random() > 0.5;
-            const confidence = (Math.random() * 100).toFixed(2);
-            resultDiv.innerHTML = `This is a <span class="text-yellow-300">${isCat ? 'Cat' : 'Dog'}</span> with <span class="text-blue-300">${confidence}%</span> confidence!`;
-          };
-        };
-        reader.readAsDataURL(file);
+    // Function to display the uploaded image
+    function displayUploadedImage(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = document.createElement('img');
+        img.src = e.target.result;
+        img.alt = file.name;
+        img.classList.add('h-40', 'w-40', 'object-cover', 'rounded-lg', 'shadow-lg', 'mx-auto', 'mt-4');
+        classifyDropZone.innerHTML = ''; // Clear the drop zone content
+        classifyDropZone.appendChild(img);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // Function to simulate prediction with a 5-second countdown
+    function startPrediction(file) {
+      resultDiv.innerHTML = '<span class="text-yellow-300">Analyzing...</span>';
+      let countdown = 5;
+
+      const interval = setInterval(() => {
+        resultDiv.innerHTML = `<span class="text-yellow-300">Analyzing... (${countdown}s)</span>`;
+        countdown--;
+
+        if (countdown < 0) {
+          clearInterval(interval);
+          simulatePrediction(file);
+        }
+      }, 1000);
+    }
+
+    // Function to simulate prediction based on the file name
+    function simulatePrediction(file) {
+      const fileName = file.name.toLowerCase();
+      if (fileName.includes('cat')) {
+        resultDiv.innerHTML = `This is a <span class="text-yellow-300">Cat</span> with <span class="text-blue-300">95%</span> confidence!`;
+      } else if (fileName.includes('dog')) {
+        resultDiv.innerHTML = `This is a <span class="text-yellow-300">Dog</span> with <span class="text-blue-300">92%</span> confidence!`;
+      } else {
+        resultDiv.innerHTML = `
+          <p class="text-red-300">Unable to classify the image based on its name.</p>
+          <table class="table-auto border-collapse border border-gray-500 mx-auto mt-4">
+            <thead>
+              <tr>
+                <th class="border border-gray-500 px-4 py-2">Index</th>
+                <th class="border border-gray-500 px-4 py-2">File Name</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="border border-gray-500 px-4 py-2">1</td>
+                <td class="border border-gray-500 px-4 py-2">${file.name}</td>
+              </tr>
+            </tbody>
+          </table>
+        `;
       }
     }
   </script>
