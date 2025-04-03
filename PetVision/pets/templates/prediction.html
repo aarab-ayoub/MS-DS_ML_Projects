@@ -119,6 +119,7 @@
     const fileInput = document.getElementById('classify-input');
     const submitButton = document.getElementById('submit-button');
     const loadingOverlay = document.getElementById('loading-overlay');
+    const form = document.querySelector('form');
     
     // Click handler
     dropZone.addEventListener('click', () => fileInput.click());
@@ -166,13 +167,47 @@
             Choose different image
           </button>
         `;
+        
+        // Submit the form via AJAX
+        submitForm(file);
       };
       reader.readAsDataURL(file);
+    }
+    
+    // Submit form via AJAX
+    function submitForm(file) {
+      loadingOverlay.style.display = 'flex';
+      startCountdown(5);
       
-      // Auto-submit after preview
-      setTimeout(() => {
-        submitButton.click();
-      }, 500);
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+      
+      fetch(window.location.href, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
+      .then(response => response.text())
+      .then(html => {
+        // Create a temporary element to parse the response
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+        
+        // Extract the result section
+        const newResult = tempDiv.querySelector('#result');
+        if (newResult) {
+          document.getElementById('result').innerHTML = newResult.innerHTML;
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+      })
+      .finally(() => {
+        loadingOverlay.style.display = 'none';
+      });
     }
     
     // Reset drop zone
@@ -185,19 +220,8 @@
         <p class="text-sm text-indigo-300 mt-1">or click to browse</p>
       `;
       fileInput.value = '';
+      document.getElementById('result').innerHTML = '';
     }
-    
-    // Form submission handler
-    document.querySelector('form').addEventListener('submit', function(e) {
-      if (!fileInput.files.length) {
-        e.preventDefault();
-        alert('Please select an image first');
-        return;
-      }
-      
-      loadingOverlay.style.display = 'flex';
-      startCountdown(5);
-    });
     
     // Countdown animation
     function startCountdown(seconds) {
@@ -213,6 +237,14 @@
         }
       }, 1000);
     }
-  </script>
+    
+    // Prevent default form submission
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      if (fileInput.files.length) {
+        handleFile(fileInput.files[0]);
+      }
+    });
+</script>
 </body>
 </html>
