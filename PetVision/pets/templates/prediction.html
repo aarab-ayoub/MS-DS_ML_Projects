@@ -52,6 +52,7 @@
       <div class="drop-zone" id="classify-drop-zone">
         <p class="text-indigo-200">Drag and drop an image here to classify it</p>
         <input type="file" id="classify-input" accept="image/*" class="hidden">
+        {% csrf_token %}
       </div>
       <div id="result" class="mt-8 text-center text-2xl font-bold text-white"></div>
     </section>
@@ -104,48 +105,50 @@
       reader.readAsDataURL(file);
     }
 
-    // Function to simulate prediction with a 5-second countdown
+    // Function to simulate prediction with a 5-second countdown using the backend
     function startPrediction(file) {
       resultDiv.innerHTML = '<span class="text-yellow-300">Analyzing...</span>';
-      let countdown = 5;
 
-      const interval = setInterval(() => {
-        resultDiv.innerHTML = `<span class="text-yellow-300">Analyzing... (${countdown}s)</span>`;
-        countdown--;
-
-        if (countdown < 0) {
-          clearInterval(interval);
-          simulatePrediction(file);
+      // Get the CSRF token from the cookies
+      const getCookie = (name) => {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== "") {
+          const cookies = document.cookie.split(";");
+          for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.startsWith(name + "=")) {
+              cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+              break;
+            }
+          }
         }
-      }, 1000);
-    }
+        return cookieValue;
+      };
 
-    // Function to simulate prediction based on the file name
-    function simulatePrediction(file) {
-      const fileName = file.name.toLowerCase();
-      if (fileName.includes('cat')) {
-        resultDiv.innerHTML = `This is a <span class="text-yellow-300">Cat</span> with <span class="text-blue-300">95%</span> confidence!`;
-      } else if (fileName.includes('dog')) {
-        resultDiv.innerHTML = `This is a <span class="text-yellow-300">Dog</span> with <span class="text-blue-300">92%</span> confidence!`;
-      } else {
-        resultDiv.innerHTML = `
-          <p class="text-red-300">Unable to classify the image based on its name.</p>
-          <table class="table-auto border-collapse border border-gray-500 mx-auto mt-4">
-            <thead>
-              <tr>
-                <th class="border border-gray-500 px-4 py-2">Index</th>
-                <th class="border border-gray-500 px-4 py-2">File Name</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="border border-gray-500 px-4 py-2">1</td>
-                <td class="border border-gray-500 px-4 py-2">${file.name}</td>
-              </tr>
-            </tbody>
-          </table>
-        `;
-      }
+      const csrfToken = getCookie("csrftoken");
+
+      // Send the file name to the backend
+      const formData = new FormData();
+      formData.append("file_name", file.name);
+
+      fetch("{% url 'simulate_prediction' %}", {
+        method: "POST",
+        body: formData,
+        headers: {
+          "X-CSRFToken": csrfToken, // Include CSRF token for security
+        },
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.error) {
+            resultDiv.innerHTML = `<span class="text-red-300">${data.error}</span>`;
+          } else {
+            resultDiv.innerHTML = `This is a <span class="text-yellow-300">${data.prediction}</span> with <span class="text-blue-300">${data.confidence}</span> confidence!`;
+          }
+        })
+        .catch((error) => {
+          resultDiv.innerHTML = `<span class="text-red-300">Error: ${error.message}</span>`;
+        });
     }
   </script>
 </body>
