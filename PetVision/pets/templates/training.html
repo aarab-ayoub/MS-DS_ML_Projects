@@ -12,30 +12,22 @@
       padding: 20px;
       text-align: center;
       cursor: pointer;
-      transition: background-color 0.3s ease;
+      transition: all 0.3s ease;
     }
     .drop-zone.dragover {
       background-color: rgba(255, 255, 255, 0.1);
+      border-color: #8b5cf6;
     }
-    .image-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-      gap: 16px;
+    .preview-image {
+      transition: all 0.3s ease;
     }
-    .loading-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.8);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      color: white;
-      font-size: 1.5rem;
-      z-index: 1000;
-      display: none; /* Hidden by default */
+    .preview-image:hover {
+      transform: scale(1.05);
+    }
+    .progress-ring__circle {
+      transition: stroke-dashoffset 0.35s;
+      transform: rotate(-90deg);
+      transform-origin: 50% 50%;
     }
   </style>
 </head>
@@ -53,28 +45,33 @@
       </div>
       <nav class="mt-4 md:mt-0">
         <ul class="flex space-x-6">
-          <li>
-            <a href="{% url 'landing_page' %}" class="text-white hover:text-pink-200 font-medium">Home</a>
-          </li>
-          <li>
-            <a href="{% url 'training_page' %}" class="text-white hover:text-pink-200 font-medium">Try It</a>
-          </li>
-          <li>
-            <a href="{% url 'prediction_page' %}" class="text-white hover:text-pink-200 font-medium">Prediction</a>
-          </li>
+          <li><a href="{% url 'landing_page' %}" class="text-white hover:text-pink-200 font-medium">Home</a></li>
+          <li><a href="{% url 'training_page' %}" class="text-white hover:text-pink-200 font-medium">Try It</a></li>
+          <li><a href="{% url 'prediction_page' %}" class="text-white hover:text-pink-200 font-medium">Prediction</a></li>
         </ul>
       </nav>
     </header>
 
+    <!-- Toast Messages -->
+    {% if messages %}
+    <div class="fixed top-4 right-4 z-50 space-y-2">
+      {% for message in messages %}
+      <div class="px-6 py-3 rounded-lg shadow-lg flex items-center 
+                  {% if message.tags == 'error' %}bg-red-500{% else %}bg-green-500{% endif %}">
+        <span>{{ message }}</span>
+        <button class="ml-4 text-white hover:text-gray-200" onclick="this.parentElement.remove()">
+          &times;
+        </button>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
     <!-- Dataset Section -->
     <section class="mb-12 px-6">
       <h2 class="text-4xl font-extrabold text-center text-white mb-12">Dataset Gallery</h2>
-      
       <div class="max-w-6xl mx-auto">
-        <!-- Cats & Dogs Container -->
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-          
-          <!-- Cat Images -->
           {% for image in cat_images %}
           <div class="relative overflow-hidden rounded-xl shadow-lg group">
             <img src="{{ MEDIA_URL }}cats/{{ image }}" alt="Cat"
@@ -85,7 +82,6 @@
           </div>
           {% endfor %}
           
-          <!-- Dog Images -->
           {% for image in dog_images %}
           <div class="relative overflow-hidden rounded-xl shadow-lg group">
             <img src="{{ MEDIA_URL }}dogs/{{ image }}" alt="Dog"
@@ -95,119 +91,189 @@
             </div>
           </div>
           {% endfor %}
-          
         </div>
       </div>
     </section>
-    
 
     <!-- Drag-and-Drop Form -->
-    <section class="mb-12">
+    <form method="post" enctype="multipart/form-data" class="mb-12">
+      {% csrf_token %}
       <h2 class="text-3xl font-bold text-center text-white mb-8">Upload Dataset</h2>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <!-- Cats Drop Zone -->
         <div class="drop-zone" id="cat-drop-zone">
-          <p class="text-indigo-200">Drag and drop 10 cat images here</p>
-          <input type="file" id="cat-input" accept="image/*" multiple class="hidden">
+          <div class="text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            <p class="text-indigo-200 mt-2">Drag and drop cat images here</p>
+            <p class="text-sm text-indigo-300 mt-1">or click to browse</p>
+          </div>
+          <div class="file-counter text-center text-indigo-200 mt-2">0/10 files</div>
+          <input type="file" name="cat_files" id="cat-input" accept="image/*" multiple class="hidden">
+          <div class="preview-container grid grid-cols-4 gap-2 mt-4"></div>
         </div>
-        <!-- Dogs Drop Zone -->
+
         <div class="drop-zone" id="dog-drop-zone">
-          <p class="text-indigo-200">Drag and drop 10 dog images here</p>
-          <input type="file" id="dog-input" accept="image/*" multiple class="hidden">
+          <div class="text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            <p class="text-indigo-200 mt-2">Drag and drop dog images here</p>
+            <p class="text-sm text-indigo-300 mt-1">or click to browse</p>
+          </div>
+          <div class="file-counter text-center text-indigo-200 mt-2">0/10 files</div>
+          <input type="file" name="dog_files" id="dog-input" accept="image/*" multiple class="hidden">
+          <div class="preview-container grid grid-cols-4 gap-2 mt-4"></div>
         </div>
       </div>
-    </section>
 
-    <!-- Training Button -->
-    <div class="text-center">
-      <button id="train-button" class="bg-gradient-to-r from-pink-500 to-purple-600 text-white px-8 py-3 rounded-lg font-semibold shadow-lg hover:from-pink-600 hover:to-purple-700 transition duration-300">
-        Train Model
-      </button>
-    </div>
+      <div class="text-center mt-8">
+        <button type="submit" name="train_model" class="bg-gradient-to-r from-pink-500 to-purple-600 text-white px-8 py-3 rounded-lg font-semibold shadow-lg hover:from-pink-600 hover:to-purple-700 transition duration-300 flex items-center mx-auto">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+          </svg>
+          Train Model
+        </button>
+      </div>
+    </form>
   </div>
 
   <!-- Loading Overlay -->
-  <div class="loading-overlay" id="loading-overlay">
-    Training in progress... Please wait.
+  <div id="loading-overlay" class="fixed inset-0 bg-black/90 flex flex-col items-center justify-center z-50 hidden">
+    <svg class="progress-ring h-32 w-32" viewBox="0 0 100 100">
+      <circle class="progress-ring__circle stroke-purple-500" stroke-width="6" fill="transparent" r="40" cx="50" cy="50"/>
+    </svg>
+    <p class="mt-6 text-xl font-semibold text-purple-200">Training AI Model</p>
+    <p class="mt-2 text-purple-300" id="countdown">Starting in 3...</p>
   </div>
 
   <script>
-    const catDropZone = document.getElementById('cat-drop-zone');
-    const dogDropZone = document.getElementById('dog-drop-zone');
-    const catInput = document.getElementById('cat-input');
-    const dogInput = document.getElementById('dog-input');
+    const maxFiles = 10;
     const loadingOverlay = document.getElementById('loading-overlay');
-
-    // Function to display uploaded images
-    function displayUploadedImages(files, dropZone) {
-      let previewContainer = dropZone.querySelector('.preview-container');
-
-      // If no preview container exists, create one
-      if (!previewContainer) {
-        previewContainer = document.createElement('div');
-        previewContainer.classList.add('flex', 'flex-wrap', 'gap-4', 'mt-4', 'preview-container');
-        dropZone.appendChild(previewContainer);
-      }
-
-      Array.from(files).forEach((file) => {
+    
+    // Initialize drop zones
+    document.querySelectorAll('.drop-zone').forEach(zone => {
+      const input = zone.querySelector('input[type="file"]');
+      
+      // Click handler
+      zone.addEventListener('click', () => input.click());
+      
+      // Drag handlers
+      zone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        zone.classList.add('dragover');
+      });
+      
+      zone.addEventListener('dragleave', () => {
+        zone.classList.remove('dragover');
+      });
+      
+      zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        zone.classList.remove('dragover');
+        if (e.dataTransfer.files.length) {
+          input.files = e.dataTransfer.files;
+          handleFiles(input.files, zone);
+        }
+      });
+      
+      // File input change
+      input.addEventListener('change', () => {
+        if (input.files.length) {
+          handleFiles(input.files, zone);
+        }
+      });
+    });
+    
+    // Handle uploaded files
+    function handleFiles(files, zone) {
+      const previewContainer = zone.querySelector('.preview-container');
+      previewContainer.innerHTML = '';
+      
+      const validFiles = Array.from(files).slice(0, maxFiles);
+      
+      validFiles.forEach((file, index) => {
+        if (!file.type.match('image.*')) return;
+        
         const reader = new FileReader();
         reader.onload = (e) => {
-          const img = document.createElement('img');
-          img.src = e.target.result;
-          img.alt = file.name;
-          img.classList.add('h-24', 'w-24', 'object-cover', 'rounded-lg', 'shadow-lg');
-          previewContainer.appendChild(img);
+          const previewItem = document.createElement('div');
+          previewItem.className = 'relative group preview-image';
+          previewItem.innerHTML = `
+            <img src="${e.target.result}" 
+                 class="w-full h-24 object-cover rounded-lg shadow-lg"
+                 alt="${file.name}">
+            <div class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <button class="text-red-500 hover:text-red-400" onclick="removePreview(this)">
+                ✕
+              </button>
+            </div>
+          `;
+          previewContainer.appendChild(previewItem);
         };
         reader.readAsDataURL(file);
       });
+      
+      updateFileCounters();
     }
-
-    // Handle Drag-and-Drop for Cats
-    catDropZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      catDropZone.classList.add('dragover');
-    });
-    catDropZone.addEventListener('dragleave', () => {
-      catDropZone.classList.remove('dragover');
-    });
-    catDropZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      catDropZone.classList.remove('dragover');
-      const files = e.dataTransfer.files;
-      if (files.length > 10) {
-        alert('You can only upload up to 10 cat images at a time.');
+    
+    // Remove preview image
+    function removePreview(button) {
+      button.closest('.preview-image').remove();
+      updateFileCounters();
+    }
+    
+    // Update file counters
+    function updateFileCounters() {
+      document.querySelectorAll('.drop-zone').forEach(zone => {
+        const count = zone.querySelector('.preview-container').children.length;
+        zone.querySelector('.file-counter').textContent = `${count}/${maxFiles} files`;
+      });
+    }
+    
+    // Animate progress ring
+    function animateProgressRing(duration) {
+      const circle = document.querySelector('.progress-ring__circle');
+      const radius = circle.r.baseVal.value;
+      const circumference = radius * 2 * Math.PI;
+      
+      circle.style.strokeDasharray = `${circumference} ${circumference}`;
+      circle.style.strokeDashoffset = circumference;
+      
+      const startTime = Date.now();
+      const endTime = startTime + duration * 1000;
+      
+      function updateProgress() {
+        const now = Date.now();
+        const progress = Math.min(1, (now - startTime) / (duration * 1000));
+        const offset = circumference - progress * circumference;
+        circle.style.strokeDashoffset = offset;
+        
+        const remaining = Math.ceil(duration - (now - startTime) / 1000);
+        document.getElementById('countdown').textContent = remaining > 0 ? 
+          `Starting in ${remaining}...` : 'Finalizing...';
+        
+        if (now < endTime) {
+          requestAnimationFrame(updateProgress);
+        }
+      }
+      
+      updateProgress();
+    }
+    
+    // Form submission handler
+    document.querySelector('form').addEventListener('submit', function(e) {
+      const catCount = document.querySelector('#cat-drop-zone .preview-container').children.length;
+      const dogCount = document.querySelector('#dog-drop-zone .preview-container').children.length;
+      
+      if (catCount < 3 || dogCount < 3) {
+        e.preventDefault();
+        alert('Please upload at least 3 images for each category');
         return;
       }
-      displayUploadedImages(files, catDropZone);
-      alert(`${files.length} cat images uploaded!`);
-    });
-
-    // Handle Drag-and-Drop for Dogs
-    dogDropZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      dogDropZone.classList.add('dragover');
-    });
-    dogDropZone.addEventListener('dragleave', () => {
-      dogDropZone.classList.remove('dragover');
-    });
-    dogDropZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dogDropZone.classList.remove('dragover');
-      const files = e.dataTransfer.files;
-      if (files.length > 10) {
-        alert('You can only upload up to 10 dog images at a time.');
-        return;
-      }
-      displayUploadedImages(files, dogDropZone);
-      alert(`${files.length} dog images uploaded!`);
-    });
-
-    // Handle Training Button Click
-    document.getElementById('train-button').addEventListener('click', () => {
-      loadingOverlay.style.display = 'flex'; // Show loading overlay
-      setTimeout(() => {
-        window.location.href = '{% url "prediction_page" %}'; // Redirect after 3 seconds
-      }, 3000);
+      
+      loadingOverlay.style.display = 'flex';
+      animateProgressRing(3);
     });
   </script>
 </body>

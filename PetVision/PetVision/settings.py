@@ -43,12 +43,18 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
-    "django.middleware.common.CommonMiddleware",Z
+    "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+CSP_DEFAULT_SRC = ["'self'"]
+CSP_IMG_SRC = ["'self'", "data:", "https://source.unsplash.com"]
+CSP_STYLE_SRC = ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"]
+CSP_SCRIPT_SRC = ["'self'", "'unsafe-inline'"]
+CSP_FONT_SRC = ["'self'"]
 
 ROOT_URLCONF = "PetVision.urls"
 
