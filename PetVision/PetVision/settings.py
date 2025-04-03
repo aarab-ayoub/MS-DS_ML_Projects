@@ -50,6 +50,12 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
+CSP_DEFAULT_SRC = ["'self'"]
+CSP_IMG_SRC = ["'self'", "data:", "https://source.unsplash.com"]
+CSP_STYLE_SRC = ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"]
+CSP_SCRIPT_SRC = ["'self'", "'unsafe-inline'"]
+CSP_FONT_SRC = ["'self'"]
+
 ROOT_URLCONF = "PetVision.urls"
 
 TEMPLATES = [

@@ -1,4 +1,3 @@
-
 from django.contrib import admin
 from django.urls import path
 from pets.views import pets, training, prediction
@@ -10,5 +9,4 @@ urlpatterns = [
     path("", pets, name="landing_page"),
     path("training/", training, name="training_page"),
     path("prediction/", prediction, name="prediction_page"),
-	
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
