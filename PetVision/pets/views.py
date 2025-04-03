@@ -27,22 +27,3 @@ def training(request):
 def prediction(request):
     template = loader.get_template("prediction.html")
     return HttpResponse(template.render())
-
-def simulate_prediction(request):
-    if request.method == "POST":
-        time.sleep(5)
-
-        
-        file_name = request.POST.get("file_name", "").lower()
-
-        if not file_name:
-            return JsonResponse({"error": "No file name provided"}, status=400)
-        if "cat" in file_name:
-            result = {"prediction": "Cat", "confidence": "95%"}
-        elif "dog" in file_name:
-            result = {"prediction": "Dog", "confidence": "92%"}
-        else:
-            result = {"prediction": "Unknown", "confidence": "N/A"}
-
-        return JsonResponse(result)
-    return JsonResponse({"error": "Invalid request method"}, status=400)

@@ -52,7 +52,6 @@
       <div class="drop-zone" id="classify-drop-zone">
         <p class="text-indigo-200">Drag and drop an image here to classify it</p>
         <input type="file" id="classify-input" accept="image/*" class="hidden">
-        {% csrf_token %}
       </div>
       <div id="result" class="mt-8 text-center text-2xl font-bold text-white"></div>
     </section>
@@ -109,24 +108,6 @@
     function startPrediction(file) {
       resultDiv.innerHTML = '<span class="text-yellow-300">Analyzing...</span>';
 
-      // Get the CSRF token from the cookies
-      const getCookie = (name) => {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== "") {
-          const cookies = document.cookie.split(";");
-          for (let i = 0; i < cookies.length; i++) {
-            const cookie = cookies[i].trim();
-            if (cookie.startsWith(name + "=")) {
-              cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-              break;
-            }
-          }
-        }
-        return cookieValue;
-      };
-
-      const csrfToken = getCookie("csrftoken");
-
       // Send the file name to the backend
       const formData = new FormData();
       formData.append("file_name", file.name);
@@ -135,7 +116,7 @@
         method: "POST",
         body: formData,
         headers: {
-          "X-CSRFToken": csrfToken, // Include CSRF token for security
+          "X-CSRFToken": "{{ csrf_token }}", // Include CSRF token for security
         },
       })
         .then((response) => response.json())
