@@ -1,12 +1,11 @@
-// /** @type {import('tailwindcss').Config} */
+/** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
-    "./pets/templates/**/*.html",
-    "./PetVision/templates/**/*.html"
+    './pets/templates/**/*.html', 
+    './pets/static/**/*.js',     
   ],
   theme: {
     extend: {},
   },
   plugins: [],
-}
-
+};
