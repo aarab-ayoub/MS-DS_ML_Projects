@@ -35,7 +35,7 @@
 </head>
 <body class="bg-gradient-to-br from-indigo-900 via-purple-800 to-pink-700 min-h-screen text-white">
   <div class="container mx-auto px-4 py-8">
-    <!-- Header -->
+
     <header class="flex flex-col md:flex-row items-center justify-between mb-12">
       <div class="flex items-center">
         <div class="bg-white rounded-full p-2 mr-3 shadow-lg">
@@ -138,7 +138,7 @@
       </section>
     </div>
 
-    <!-- Loading Overlay -->
+    <!-- Loading -->
     <div
       id="loading-overlay"
       class="fixed inset-0 bg-black/90 flex flex-col items-center justify-center z-50 hidden"
@@ -161,10 +161,8 @@
       const loadingOverlay = document.getElementById("loading-overlay");
       const form = document.querySelector("form");
 
-      // Click handler
       dropZone.addEventListener("click", () => fileInput.click());
 
-      // Drag handlers
       dropZone.addEventListener("dragover", (e) => {
         e.preventDefault();
         dropZone.classList.add("dragover");
@@ -183,7 +181,7 @@
         }
       });
 
-      // File input change
+
       fileInput.addEventListener("change", () => {
         if (fileInput.files.length) {
           handleFile(fileInput.files[0]);
@@ -208,7 +206,6 @@
           </button>
         `;
 
-          // Submit the form via AJAX
           submitForm(file);
         };
         reader.readAsDataURL(file);
@@ -235,11 +232,10 @@
         })
           .then((response) => response.text())
           .then((html) => {
-            // Create a temporary element to parse the response
+
             const tempDiv = document.createElement("div");
             tempDiv.innerHTML = html;
 
-            // Extract the result section
             const newResult = tempDiv.querySelector("#result");
             if (newResult) {
               document.getElementById("result").innerHTML = newResult.innerHTML;
@@ -253,7 +249,6 @@
           });
       }
 
-      // Reset drop zone
       function resetDropZone() {
         dropZone.innerHTML = `
         <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -266,7 +261,6 @@
         document.getElementById("result").innerHTML = "";
       }
 
-      // Countdown animation
       function startCountdown(seconds) {
         let count = seconds;
         const countdownElement = document.getElementById("countdown");
@@ -281,7 +275,6 @@
         }, 1000);
       }
 
-      // Prevent default form submission
       form.addEventListener("submit", function (e) {
         e.preventDefault();
         if (fileInput.files.length) {

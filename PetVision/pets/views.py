@@ -11,7 +11,7 @@ from django.shortcuts import redirect
 
 def handle_uploaded_files(files, animal_type):
     ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
-    MAX_SIZE = 5 * 1024 * 1024  # 5MB
+    MAX_SIZE = 5 * 1024 * 1024
     
     try:
         fs = FileSystemStorage(location=os.path.join(settings.MEDIA_ROOT, animal_type))

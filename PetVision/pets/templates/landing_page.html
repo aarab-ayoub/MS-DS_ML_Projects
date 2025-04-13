@@ -35,7 +35,7 @@
     class="bg-gradient-to-br from-indigo-900 via-purple-800 to-pink-700 min-h-screen bg-paws"
   >
     <div class="container mx-auto px-4 py-8">
-      <!-- Header -->
+      
       <header
         class="flex flex-col md:flex-row items-center justify-between mb-12"
       >
@@ -75,7 +75,7 @@
         </nav>
       </header>
 
-      <!-- Hero Section -->
+      
       <section
         class="flex flex-col md:flex-row items-center justify-between mb-12 md:mb-20 px-2 md:px-0"
       >
@@ -221,7 +221,6 @@
         </div>
       </section>
 
-      <!-- Animated Animals Section -->
       <section class="mb-20 overflow-hidden">
         <h2 class="text-3xl font-bold text-center text-white mb-12">
           Meet Our Furry Friends
@@ -254,7 +253,6 @@
         </div>
       </section>
 
-      <!-- Stats Section -->
       <section class="mb-20">
         <div
           class="bg-white bg-opacity-10 backdrop-filter backdrop-blur-lg p-8 rounded-xl shadow-lg"
@@ -277,7 +275,6 @@
       </section>
 
 
-      <!-- Call to Action -->
       <section class="mb-20 text-center">
         <h2 class="text-3xl md:text-4xl font-bold text-white mb-6">
           Ready to try it yourself?
@@ -293,7 +290,7 @@
         >
       </section>
 
-      <!-- Footer -->
+      
       <footer class="text-center text-indigo-200 py-8">
         <p>&copy; 2025 PetVision AI. All rights reserved.</p>
         <div class="mt-4 flex justify-center space-x-4">
@@ -307,10 +304,10 @@
 </html>
 
 <script>
-  // Function to animate the counting effect
+  // counting effect
   function animateCount(element, target, duration) {
     const start = 0;
-    const increment = target / (duration / 10); // Increment value based on duration
+    const increment = target / (duration / 10);
     let current = start;
 
     const interval = setInterval(() => {
@@ -323,14 +320,13 @@
     }, 10);
   }
 
-  // Trigger the counting effect after the page loads
   window.addEventListener("DOMContentLoaded", () => {
     const accuracyRate = document.getElementById("accuracy-rate");
     const imagesAnalyzed = document.getElementById("images-analyzed");
     const processingTime = document.getElementById("processing-time");
 
-    animateCount(accuracyRate, parseInt(accuracyRate.dataset.target), 2000); // 2 seconds
-    animateCount(imagesAnalyzed, parseInt(imagesAnalyzed.dataset.target), 2000); // 2 seconds
-    animateCount(processingTime, parseInt(processingTime.dataset.target), 2000); // 2 seconds
+    animateCount(accuracyRate, parseInt(accuracyRate.dataset.target), 2000);
+    animateCount(imagesAnalyzed, parseInt(imagesAnalyzed.dataset.target), 2000);
+    animateCount(processingTime, parseInt(processingTime.dataset.target), 2000);
   });
 </script>
