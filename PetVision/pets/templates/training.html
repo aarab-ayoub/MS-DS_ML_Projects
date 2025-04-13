@@ -152,14 +152,12 @@
     const maxFiles = 10;
     const loadingOverlay = document.getElementById('loading-overlay');
     
-    // Initialize drop zones
     document.querySelectorAll('.drop-zone').forEach(zone => {
       const input = zone.querySelector('input[type="file"]');
       
-      // Click handler
       zone.addEventListener('click', () => input.click());
       
-      // Drag handlers
+
       zone.addEventListener('dragover', (e) => {
         e.preventDefault();
         zone.classList.add('dragover');
@@ -178,7 +176,6 @@
         }
       });
       
-      // File input change
       input.addEventListener('change', () => {
         if (input.files.length) {
           handleFiles(input.files, zone);
@@ -186,7 +183,6 @@
       });
     });
     
-    // Handle uploaded files
     function handleFiles(files, zone) {
       const previewContainer = zone.querySelector('.preview-container');
       previewContainer.innerHTML = '';
@@ -218,13 +214,12 @@
       updateFileCounters();
     }
     
-    // Remove preview image
     function removePreview(button) {
       button.closest('.preview-image').remove();
       updateFileCounters();
     }
     
-    // Update file counters
+
     function updateFileCounters() {
       document.querySelectorAll('.drop-zone').forEach(zone => {
         const count = zone.querySelector('.preview-container').children.length;
@@ -232,7 +227,7 @@
       });
     }
     
-    // Animate progress ring
+
     function animateProgressRing(duration) {
       const circle = document.querySelector('.progress-ring__circle');
       const radius = circle.r.baseVal.value;
