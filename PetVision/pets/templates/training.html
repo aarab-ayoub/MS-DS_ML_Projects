@@ -34,7 +34,7 @@
 </head>
 <body class="bg-gradient-to-br from-indigo-900 via-purple-800 to-pink-700 min-h-screen text-white">
   <div class="container mx-auto px-4 py-8">
-    <!-- Header -->
+
     <header class="flex flex-col md:flex-row items-center justify-between mb-12">
       <div class="flex items-center">
         <div class="bg-white rounded-full p-2 mr-3 shadow-lg">
@@ -53,7 +53,7 @@
       </nav>
     </header>
 
-    <!-- Toast Messages -->
+    <!-- Toast_Messages -->
     {% if messages %}
     <div class="fixed top-4 right-4 z-50 space-y-2">
       {% for message in messages %}
@@ -68,7 +68,7 @@
     </div>
     {% endif %}
 
-    <!-- Dataset Section -->
+
     <section class="mb-12 px-6">
       <h2 class="text-4xl font-extrabold text-center text-white mb-12">Dataset Gallery</h2>
       <div class="max-w-6xl mx-auto">
@@ -96,7 +96,7 @@
       </div>
     </section>
 
-    <!-- Drag-and-Drop Form -->
+
     <form method="post" enctype="multipart/form-data" class="mb-12">
       {% csrf_token %}
       <h2 class="text-3xl font-bold text-center text-white mb-8">Upload Dataset</h2>
@@ -139,7 +139,7 @@
     </form>
   </div>
 
-  <!-- Loading Overlay -->
+  <!-- Loading-->
   <div id="loading-overlay" class="fixed inset-0 bg-black/90 flex flex-col items-center justify-center z-50 hidden">
     <svg class="progress-ring h-32 w-32" viewBox="0 0 100 100">
       <circle class="progress-ring__circle stroke-purple-500" stroke-width="6" fill="transparent" r="40" cx="50" cy="50"/>
