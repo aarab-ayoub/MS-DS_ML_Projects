@@ -1,0 +1,605 @@
+ TP1.ipynb
+```
+import numpy as np 
+import matplotlib.pyplot as plt
+
+x= np.array([1,2,3])
+y= np.array([3,5,7])
+
+plt.scatter(x, y, marker='o',c='b')
+plt.title("dataset maison ")
+plt.xlabel('surface')
+plt.ylabel('prix')
+a, b  = 1, 1
+plt.plot(x, a*x+b, c='r', label='ligne droitel, a= 1 et b=1 ') 
+plt.legend()
+a, b  = 1.5, 1
+
+plt.plot(x, a*x+b, c='b', label='ligne droitel, a= 1.5 et b=1 ') 
+plt.legend()
+a, b  = 2, 1
+
+plt.plot(x, a*x+b, c='g', label='ligne droitel, a= 2 et b=1 ') 
+plt.legend()
+```                       
+TP2.ipynb
+```
+import numpy as np 
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+x= np.array([1,2,3,4,5])
+y= np.array([1,2,3,4,5])
+
+import numpy as np
+
+def J(x, y, a, b=0):
+    m = x.shape[0]  
+    erreurTotale = 0
+    for i in range(m):
+        yPred = a * x[i] + b
+        erreur = (yPred - y[i]) ** 2
+        erreurTotale += erreur
+    return (1 / (2 * m)) * erreurTotale
+
+a= np.array([-1,-0.5,0,0.5,1,1.5,2,3])
+b=np.zeros(8)
+
+plt.subplot(1,2,1)
+plt.title("Modele f(x)")
+plt.xlabel("f(x)")
+plt.scatter(x,y)
+for i in range(8):
+    plt.plot(x,a[i]*x,'r')
+
+plt.subplot(1,2,2)
+plt.title("Fonction de cout")
+plt.xlabel("a")
+plt.ylabel("J(x)")
+plt.plot(a, J(x, y, a, b),'o-')
+          
+                    
+
+def J(x, y, a, b):
+    return np.mean((y - (a * x + b))**2)
+
+# Créer une grille pour a et b
+a_vals = np.linspace(-10, 10, 100)  # Plage pour a
+b_vals = np.linspace(-10, 10, 100)  # Plage pour b
+A, B = np.meshgrid(a_vals, b_vals)  # Créer une grille 2D
+
+# Calculer J(x, y, a, b) pour chaque paire (a, b)
+Z = np.zeros_like(A)
+for i in range(A.shape[0]):
+    for j in range(A.shape[1]):
+        Z[i, j] = J(x, y, A[i, j], B[i, j])
+
+# Visualisation de la fonction de coût en 3D
+fig = plt.figure(figsize=(10, 7))
+ax = fig.add_subplot(122, projection='3d')
+
+# Tracer la surface de la fonction de coût
+surf = ax.plot_surface(A, B, Z, cmap='viridis', edgecolor='none')
+
+# Ajouter des labels et un titre
+ax.set_xlabel('a')
+ax.set_ylabel('b')
+ax.set_zlabel('J(x, y, a, b)')
+ax.set_title('Surface de la fonction de coût')
+
+# Ajuster la vue pour mieux observer la forme de bol
+ax.view_init(30, 45)  # Ajuste l'angle de vue
+
+# Ajouter une barre de couleur
+fig.colorbar(surf)
+
+# Afficher les graphiques
+plt.tight_layout()
+plt.show()
+```                                                  
+TP3.ipynb
+
+```
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+
+df =pd.read_csv('./Datapersonels.csv',delimiter=";")
+X=df.iloc[:,0].values
+Y=df.iloc[:,-1].values
+X=X.reshape(len(X),1)
+Y=Y.reshape(len(Y),1)
+plt.scatter(X,Y, color='blue')
+
+```
+TP4.ipynb
+```
+import numpy as np 
+import matplotlib.pyplot as plt
+from sklearn.datasets import make_regression 
+
+"""
+#Genener un Dataset avec Numpy
+X=np.linspace(0,10,100).reshape(100,1)
+Y=X**2 +np.random.randn(100,1) #Dtaset non lineair
+"""
+X,y = make_regression(n_samples=100,n_features=1,noise=50)
+
+y=y.reshape(X.shape[0],1)
+
+plt.scatter(X,y)
+
+X= np.hstack((X, np.ones(X.shape)))
+X
+theta =np.random.randn(2,1)
+theta
+
+def F(X, theta):
+    return X.dot(theta)
+
+def fontionCout(X, y, theta):
+    m=len(X)
+    J=1/(2*m)*np.sum((F(X,theta)- y)**2)
+    return J
+
+fontionCout(X, y, theta)
+
+def gradient (X,y,theta):
+    m=len(X)
+    dJ_dtheta = 1/m * X.T.dot(F(X,theta) -y )
+    return dJ_dtheta
+
+def gradientDescent(X,y,theta,alpha=0.01,iterations=1000):
+    for i in range (iterations):
+        theta -=alpha*gradient(X,y,theta)
+    return theta
+
+gradientDescent(X,y,theta)
+
+Y_predictions = F(X,theta)
+plt.scatter(X[:,0],y)
+plt.plot(X[:,0] ,Y_predictions ,c='r')
+
+def coefficientDetermination (y,Y_predictions):
+    A= (( y - Y_predictions)**2).sum()
+    B= np.sum((y-y.mean())**2)
+    return 1- A/B
+
+coefficientDetermination(y ,Y_predictions)
+
+```
+tp7.ipynb
+```
+import pandas as pd
+from sklearn.linear_model import SGDRegressor
+import matplotlib.pyplot as plt
+
+df = pd.read_csv('Datapersonels.csv',delimiter=";")
+X=df.iloc[:,0].values
+y=df.iloc[:,-1].values
+X=X.reshape((len(X),1))
+y = y.ravel()
+plt.scatter(X,y,color='blue')
+
+model =SGDRegressor(max_iter=10000, eta0=0.01)
+model.fit(X,y)
+
+r=model.score(X,y)
+print(r*100,"%")
+
+Y_pred=model.predict(X)
+
+plt.scatter(X, y, color='red')
+plt.plot(X,Y_pred , color='blue')
+plt.title('Salaire anuuel vs. Expérience (Entrainemet)')
+plt.show()
+```
+TP1_Prétraitement des données_Régression linéaire.ipynb
+```
+# Prétraitement des données (Data Preprocessing) & Régression
+
+Dans ce TP, nous allons construire des <b>modèles de la régression</b> pour prédire les <b>charges médicaux</b> en utilisant un Dataset d'<b>assurance</b>.
+<b>Objectif1 :</b> Les données nécessitent de <b>prétraitement</b> (nettoyage et codage)
+
+<b>Objectif2 :</b> Prévisions d'assurance en utilisant <b><font color='red'>plusieurs algorithmes</font></b> de la <b>régression</b>
+
+<b>Objectif3 :</b> <b><font color='red'>Comparaison</font></b> de ces <b>algorithmes</b>
+
+<b>Lien du Dataset :</b> https://www.kaggle.com/datasets/mirichoi0218/insurance
+# 1. Prétraitement des données (Data Preprocessing)
+### 1.1. Importer les bibliothèques nécessaires: numpy, matplotlib.pyplot, pandas et seaborn
+from time import time
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+### 1.2. Importer le dataset
+dataset = pd.read_csv('insurance.csv')
+dataset.head() # Afficher les 5 première lignes du Dataset
+dataset.tail() # Afficher les 5 dernières lignes du Dataset
+dataset.shape # Toujours commencer par afficher les dimensions du dataset
+### 1.3. Analyser le dataset
+dataset.info() # Informations sur le dataset
+dataset.describe() # Statistiques sur le dataset
+#Numerical features 
+dataset.select_dtypes(include=['int64','float64']).columns
+#Categorical features 
+dataset.select_dtypes(include=['object']).columns
+### 1.4. Regrouper le dataset par « sexe », « fumeur » et « région ».
+dataset_sex = dataset.groupby(by='sex') # par sexe
+dataset_sex.mean()
+dataset_smoker = dataset.groupby(by='smoker') # par smoker
+dataset_smoker.mean()
+dataset_region = dataset.groupby(by='region') # par région
+dataset_region.mean()
+### 1.5. Gérer les données manquantes
+dataset.isnull().values.any() # Vérifier s'il y a des valeurs nulles
+dataset.isnull().values.sum() # Vérifier combien de valeurs nulles
+#Si il y a des valeurs nulles
+dataset.isnull().sum()
+#Afficher les features qui contiennent des valeurs nulles
+dataset.columns[dataset.isnull().any()]
+### 1.5.1 Solutions :
+<ol>
+    
+<li> <b>Supprimer</b> les colonnes qui contiennent des nuls (nan) par la commande : <br>    
+    <b>dataset.drop(columns=['feature1','feature2',...])</b>
+</li>
+<li>
+Ou <b>remplacer </b> les données manquantes par (<b>mean, most_frequent ou constant</b>) des autres données,
+</li>
+Pour plus de documentation sur :
+    
+https://scikit-learn.org/stable/modules/generated/sklearn.impute.SimpleImputer.html
+
+</ol>
+### Par exemple s'il y a des données manquantes dans la colonne (children), remplacer les par most_frequent
+from sklearn.impute import SimpleImputer
+imputer = SimpleImputer(missing_values=np.nan, strategy="most_frequent")
+imputer.fit(dataset.iloc[:, 3:4])#colonne (children)
+dataset.iloc[:, 3:4] = imputer.transform(dataset.iloc[:, 3:4])
+dataset.iloc[:, 3:4]
+### Si constant, ajouter l'atrribut fill_value, par exemple la colonne age
+imputer = SimpleImputer(missing_values=np.nan, strategy="constant", fill_value= 1)
+imputer.fit(dataset.iloc[:, 0:1])#colonne (age)
+dataset.iloc[:, 0:1] = imputer.transform(dataset.iloc[:, 0:1])
+dataset.iloc[:, 0:1]
+### Si mean, par exemple la colonne bmi
+
+imputer = SimpleImputer(missing_values=np.nan, strategy="mean")
+imputer.fit(dataset.iloc[:, 2:3])#colonne (bmi)
+dataset.iloc[:, 2:3] = imputer.transform(dataset.iloc[:, 2:3])
+dataset.iloc[:, 2:3]
+dataset.head()
+# Afficher target
+bar = sns.displot(dataset['charges'])
+### 1.6. Codage des variables catégorielles
+dataset.head()
+dataset.select_dtypes(include='object').columns # afficher les données catégorielles
+dataset['sex'].unique() #vérifier les valeurs uniques dans la colonne 'sex'
+dataset['smoker'].unique() #vérifier les valeurs uniques dans la colonne 'smoker'
+dataset['region'].unique() #vérifier les valeurs uniques dans la colonne 'region'
+### 1.7. Convertir les données catégorielles en variables fictives ou indicatrices.
+dataset = pd.get_dummies(data=dataset, drop_first=True)
+dataset.head()
+dataset.shape # afficher les nouvelles dimensions du dataset
+### 1.8. Matrice de corrélation & Heatmap
+dataset_2 = dataset.drop(columns='charges')
+dataset_2.head()
+dataset_2.corrwith(dataset['charges']).plot.bar(figsize=(10,5), title = 'Correlation avec les charges', 
+                                                rot = 90, grid = True)
+#### Remarques sur le diagramme:
+
+Le diagramme montre que le <b>(feature smoker_yes)</b> est fortement corrélé <b>(liée)</b> avec les <b>charges</b>
+
+et le <b>(feature age)</b> est <b>moyennement</b> corrélé avec les <b>charges</b>
+
+et les autres (features) <b>faible</b> corrélation
+corr = dataset.corr() # Créer la matrice de correlation
+corr
+# Matrice de correlation & Heatmap
+plt.figure(figsize=(10,5))
+sns.heatmap(data = corr, annot=True)
+#Afficher les features de haute correlation
+corr.index[abs(corr['charges'])>0.5]
+### 1.9. Diviser (Split) Dataset
+dataset.head()
+# features
+X = dataset.drop(columns='charges')
+# target
+y = dataset['charges']
+### 1.10. Training & Testing Dataset
+Pour plus de documentation sur (<b>Split Dataset</b>) : https://scikit-learn.org/stable/modules/classes.html#module-sklearn.model_selection
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.7, random_state=0)
+#Dimensions du Dataset
+print(f' Dimensions de X_train : {X_train.shape}')
+print(f' Dimensions de y_train : {y_train.shape}')
+print(f' Dimensions de X_test : {X_test.shape}')
+print(f' Dimensions de y_test : {y_test.shape}')
+### 1.11. Normalisation (Scaling) des (features)
+Pour plus de documentation sur <b>(Scaling) des (features)</b> : https://scikit-learn.org/stable/modules/classes.html#module-sklearn.preprocessing
+from sklearn.preprocessing import StandardScaler
+scaler = StandardScaler()
+X_train, X_test = scaler.fit_transform(X_train), scaler.transform(X_test)
+X_train
+X_test
+# 2. Régression
+### 2.1 Régression linéaire
+Pour plus de documentation sur la <b>Régression linéaire</b> : https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html#sklearn.linear_model.LinearRegression
+### 2.2. Générer le Modèle
+$f(x) = a_i \times X_i + b$
+from sklearn.linear_model import LinearRegression
+model1 = LinearRegression()
+t0=time()
+model1.fit(X_train, y_train)
+t1=time()
+print("LinearRegression:",t1-t0,'s')
+Affchier les <b>coefficients<b> a et b du modèle f(x):
+$f(x) = a_i \times X_i + b$
+$f(x) = a_1 \times age + a_2 \times bmi + a_3 \times children + a_4 \times sex\_male + a_5 \times smoker\_yes + a_6 \times region\_northwest + a_7 \times region\_southeast + a_8 \times region\_southwest + b$
+print('a_i = ', model1.coef_)
+print('b = ', model1.intercept_)
+### 2.3. Tester le Modèle
+Pour plus de documentation sur comment tester le modèle tel que le <b>coefficient de détermination</b> : https://scikit-learn.org/stable/modules/classes.html#sklearn-metrics-metrics
+y_pred = model1.predict(X_test)
+model1.score(X_test,y_test)
+from sklearn.metrics import r2_score
+r2_score(y_test, y_pred)
+### 2.4. Random Forest Regression
+Pour plus de documentation sur <b> Random Forest Regression</b> : https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestRegressor.html#sklearn.ensemble.RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor
+model2 = RandomForestRegressor()
+t0=time()
+model2.fit(X_train, y_train)
+t1=time()
+print("RandomForestRegressor:",t1-t0,'s')
+y_pred = model2.predict(X_test)
+model2.score(X_test,y_test)
+# <font color = 'red'>3. Autres algorithmes de la régression </font><font color = 'blue'>(Comparaison)</font>
+from sklearn.linear_model import LinearRegression,SGDRegressor,Lasso,Ridge
+from sklearn.ensemble import RandomForestRegressor,GradientBoostingRegressor
+from sklearn.svm import SVR
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.neighbors import KNeighborsRegressor
+
+from sklearn.metrics import mean_absolute_error,mean_squared_error,median_absolute_error 
+
+LinearRegressionModel = LinearRegression(fit_intercept=True, copy_X=True,n_jobs=-1)
+SGDRegressionModel = SGDRegressor(alpha=0.1,random_state=33,penalty='l2',loss = 'huber')
+LassoRegressionModel = Lasso(alpha=1.0,random_state=33)
+RidgeRegressionModel = Ridge(alpha=1.0,random_state=33)
+RandomForestRegressorModel = RandomForestRegressor(n_estimators=1000,max_depth=8, random_state=33)
+GBRModel = GradientBoostingRegressor(n_estimators=500,max_depth=7,learning_rate = 1.5 ,random_state=33)
+SVRModel = SVR(C = 1.0 ,epsilon=0.1,kernel = 'rbf') 
+DecisionTreeRegressorModel = DecisionTreeRegressor( max_depth=3,random_state=33)
+KNeighborsRegressorModel = KNeighborsRegressor(n_neighbors = 5, weights='uniform',algorithm = 'auto') 
+
+Models = [LinearRegressionModel,SGDRegressionModel,LassoRegressionModel,RidgeRegressionModel,RandomForestRegressorModel,
+          GBRModel,SVRModel,DecisionTreeRegressorModel,KNeighborsRegressorModel]
+
+
+for Model in Models : 
+    print(f'for Model {str(Model).split("(")[0]}')
+    t0=time()
+    Model.fit(X_train, y_train)
+    t1=time()
+    print("fit time:",t1-t0,'s')   
+    y_pred = Model.predict(X_test)
+    print(f'Coefficient de détermination value is  : {Model.score(X_test,y_test)}')
+    print(f'MAE value is  : {mean_absolute_error(y_test, y_pred)}')
+    print(f'MSE value is  : {mean_squared_error(y_test, y_pred)}')
+    print(f'MdSE value is  : {median_absolute_error(y_test, y_pred)}')
+    print('=================================================')
+# 4. Prédiction les charges pour un nouveau client
+Soit le client suivant :
+
+<b>Nom : Mohamed, age : 40, sex : 1, bmi : 45,	children : 2, smoker : 1, region : northeast</b>
+dataset.head()
+#Mohamed = [[40, 45, 2, 1, 1, 0, 0, 0]]
+Mohamed = [[32, 28.880, 0, 1, 0, 1, 0, 0]]
+#LinearRegression
+model1.predict(Mohamed)
+model1.predict(scaler.transform(Mohamed))
+#RandomForestRegressor
+model2.predict(Mohamed)
+model2.predict(scaler.transform(Mohamed))
+Fatima = [[19, 27.9, 0, 0, 1, 0, 0, 1]]
+model1.predict(Fatima)
+model1.predict(scaler.transform(Fatima))
+model2.predict(Fatima)
+model2.predict(scaler.transform(Fatima))
+```   
+TP15_Régression Logistique avec Gradient Descent Spam.ipynb
+```
+# Régression Logistique avec Gradient Descent et Dataset mails
+Objectif c'est de classifier les emails (<b>spam</b> ou <b>non spam</b>)
+import pandas as pd #Importer les Dataset
+import numpy as np #Manipuler le Dataset comme matrice
+import matplotlib.pyplot as plt #Visualiser Lesdonnées
+df = pd.read_csv('mails.csv',delimiter=",")
+df.head()
+#X = df.iloc[:,:4].values
+
+X1 = df.iloc[:,0].values #colonne des fautes d'orthographe 
+X2 = df.iloc[:,1].values #colonne des nbr des mots-clés déclencheurs
+Y = df.iloc[:,-1].values #colonne spam ou non spam
+
+X1 = X1.reshape(len(X1),1) #redimenssionner X1 vers un vecteur colonne
+X2 = X2.reshape(len(X2),1)
+
+Y = Y.reshape(len(Y),1)
+
+X11 = X1[Y == 1]#Contient que les X1 dont y == 1
+X12 = X1[Y == 0]#Contient que les X1 dont y == 0
+X21 = X2[Y == 1]#Contient que les X2 dont y == 1
+X22 = X2[Y == 0]#Contient que les X2 dont y == 0
+
+#y = y.reshape(len(y),1)
+#plt.title('Spam ou Non Spam')
+
+plt.xlabel("x1 : fautes d'orthographe")
+plt.ylabel("x2 : nbr des mots-clés déclencheurs")
+
+plt.plot(X11, X21, 'xr')
+plt.plot(X12, X22, 'ob')
+x = np.linspace(1,7)
+y = -x + 7
+plt.text(5,2, '$x_1 + x_2 = 7$', color = 'm',fontsize = 20)
+plt.text(3, 4, "$ ~~~~~~ \\hat{y} = 1$", color = 'r',fontsize = 20)
+plt.arrow(3,4,1,1,width=0.1,edgecolor='red', facecolor='red')
+plt.text(1, 2.2, "$ ~~~~~~ \\hat{y} = 0$", color = 'c', fontsize = 20)
+plt.arrow(3,4,-1,-1,width=0.1,edgecolor='c', facecolor='c')
+plt.plot(x, y, 'm')
+theta = np.random.randn(3, 1)
+theta
+### Modèle G(X) sous forme d'une fonction de Sigmoide : $G(X) = \frac{1}{1+e^{-X.\theta}}$
+def G(X, theta):
+    return 1/(1+np.e**(-(X.dot(theta))))
+### Fonction de cout : $J(\theta) = \frac{-1}{m}\sum_{i=1}^{m}(y\times log(g(X.\theta))+(1-y)\times log(1-g(X.\theta))$
+def fonctionCout(X, Y, theta):
+    m = len(X)
+    #J = -1/m*np.sum(Y.dot(np.log(G(X,theta)))+(1-Y).dot(log(1-G(X,theta))))
+    J = -1/m*np.sum(Y*(np.log(G(X,theta)))+(1-Y)*(np.log(1-G(X,theta))))
+    return J
+### Gradient : $\frac{d(J(\theta))}{d\theta} = \frac{1}{m}X^T.(g(X.\theta) - y)$
+def gradient(X, Y, theta):
+    m = len(X)
+    dJ_dtheta = 1/m * X.T.dot(G(X, theta) - Y)
+    return dJ_dtheta
+### Algorithme de Gradient Descent
+def gradientDescent(X, Y, theta, alpha=0.1, iterations=1000): #alpha=0.01, iterations=2000
+    for i in range(iterations):
+        theta -= alpha*gradient(X, Y, theta)
+        #print(theta)
+    return theta
+gradientDescent(X, Y, theta)
+### Affichage de la frontière de décision
+### Lorsque $G(X) = a_1 \times x_1 + a_2 \times x_2 + b = 0$
+### càd $x_2 = - \frac{a_1}{a_2} \times x_1   - \frac{b}{a_2}$ 
+avec $a_1 = \theta[0]$, $a_2 = \theta[1]$ et $b = \theta[2]$
+plt.xlabel("x1")
+plt.ylabel("x2")
+plt.plot(X1, X2, 'x')
+plt.plot(X[:, 0], -theta[0]*X[:, 0]/theta[1] - theta[2]/theta[1], 
+         label = 'Frontière de décision : $G(X) = a_1 \\times x_1 + a_2 \\times x_2 + b = 0$', color='m')
+plt.legend()
+#plot_x = np.array([min(X[:, 0]), max(X[:, 0])])
+### Prédiction
+### Exp1 :
+email1 : fautes d'orthographe = 6 	nbr des mots-clés déclencheurs = 6
+
+### Prédiction :
+<b>Spam, proche de 1</b>
+
+### Exp2 :
+email2 : fautes d'orthographe = 1 	nbr des mots-clés déclencheurs = 1
+
+### Prédiction :
+<b>Non spam, proche de 0</b>
+G(np.array([6, 6, 1]), theta) #proche de 1
+G(np.array([1, 1, 1]), theta) #proche de 0
+### Courbe d'apprentissage 
+def gradientDescent_(X, Y, theta, alpha=0.1, iterations=1000):
+    thetaHistoire = np.zeros((iterations, 3))
+    coutHistoire = np.zeros(iterations)
+    for i in range(iterations):
+        theta -= alpha*gradient(X, Y, theta)
+        thetaHistoire[i,:] = theta.T
+        coutHistoire[i] = fonctionCout(X, Y, theta)
+    return theta, thetaHistoire, coutHistoire
+#visualisation des courbes d'apprentissage
+iterations=1000
+theta, thetaHistoire, coutHistoire = gradientDescent_(X, Y, theta)
+#plt.figure(figsize = (15, 15))
+
+#plt.subplots(figsize=(15,10)plt.title('Fonction de coût'))
+plt.xlabel('iterations')
+plt.ylabel('J(theta)')
+plt.plot(range(iterations), coutHistoire)
+```                     
+TP16_Régression Logistique avec SGDClassifier de sklearn et dataset Spam.ipynb
+```
+# Régression Logistique avec SGDClassifier de sklearn Dataset mails
+Objectif c'est de classifier les emails (<b>spam</b> ou <b>non spam</b>)
+import pandas as pd #Importer les Dataset
+import numpy as np #Manipuler le Dataset comme matrice
+import matplotlib.pyplot as plt #Visualiser Les données
+from sklearn.linear_model import SGDClassifier #Contient l'algorithme de Gradient Descent et d'autres
+df = pd.read_csv('Dataset/mails.csv',delimiter=";")
+df.head()
+X1 = df.iloc[:,0].values #colonne des fautes d'orthographe 
+X2 = df.iloc[:,1].values #colonne des nbr des mots-clés déclencheurs
+Y = df.iloc[:,-1].values #colonne spam ou non spam
+
+X1 = X1.reshape(len(X1),1) #redimenssionner X1 vers un vecteur colonne
+X2 = X2.reshape(len(X2),1)
+X = np.hstack((X1, X2)) #Concatenation des features
+
+Y = Y.reshape(len(Y),1)
+Y
+X
+### Model
+# fit the model
+clf = SGDClassifier(alpha=0.01, max_iter=1000)
+clf.fit(X,Y)
+plt.xlabel("x1")
+plt.ylabel("x2")
+plt.plot(X[:, 0], X[:, 1], 'x')
+
+#a1, a2 et b ou bien theta0, theta1, theta2
+theta0, theta1, theta2 = clf.coef_[0,0], clf.coef_[0,1], clf.intercept_[0]
+
+plt.plot(X[:, 0], -theta0*X[:, 0]/theta1 - theta2/theta1, 
+         label = 'Frontière de décision : $G(X) = a_1 \\times x_1 + a_2 \\times x_2 + b = 0$', color='m')
+plt.legend()
+### coefficient de détermination
+clf.score(X, Y)
+### Prédiction
+### Exp1 :
+email1 : fautes d'orthographe = 6 	nbr des mots-clés déclencheurs = 6
+
+### Prédiction :
+<b>Spam</b>
+
+### Exp2 :
+email2 : fautes d'orthographe = 1 	nbr des mots-clés déclencheurs = 1
+
+### Prédiction :
+<b>Non spam</b>
+print(clf.predict([[6, 6]]))
+print(clf.predict([[1, 1]]))
+```   
+TP14_Sigmoide_Function.ipynb
+```
+import numpy as np
+import matplotlib.pyplot as plt
+from math import e
+### Fonction de Sigmoide 
+g = lambda z : 1/(1+e**(-z))
+"""
+def g(z):
+    return 1/(1+e**(-z))
+"""
+z = np.arange(-10,10)
+y = g(z)
+plt.plot(z, y, )
+plt.title('$g(z) = \\frac{1}{1+e{-z}}$', fontsize=10, color='r')
+### Frontière de décision vs seuil
+plt.title('$g(z) = \\frac{1}{1+e{-z}}$', fontsize=10, color='r')
+plt.plot(z, y,'r')
+plt.xlabel('$z=0$')
+plt.title('Frontière de décision vs Seuil à 0.5')
+
+plt.text(-9, 0.8, 'Frontière de décision', color = 'b', fontsize = 13)
+
+plt.text(6, 0.93, 'tend vers 1 ->')
+plt.text(-10.7, 0.05, '<- tend vers 0')
+plt.text(0.5, 0.6, '$g(z) geq 0.5$', color='r', rotation=65)
+plt.text(-2.5, 0.2, '$g(z) < 0.5$', color='r', rotation=65)
+
+plt.axvline(color = 'b')
+plt.axhline(y = 0.5, color ='k', linestyle ="--")
+plt.text(-12.5, 0.5, '0.5', color='r')
+```
