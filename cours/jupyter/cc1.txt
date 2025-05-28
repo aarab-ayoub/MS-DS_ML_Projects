@@ -1,0 +1,9 @@
+CC1, Machine Learning, Data Preprocessing & Classification
+Objectif : Construction des modèles de la classification pour prédire si un patient fume ou non en utilisant un Dataset d'assurance
+
+Partie1 : (10 points)
+- Les données nécessitent de prétraitement (nettoyage et codage et réduction (suppression) des features les moins impactants avec l’utilisation de la matrice de corrélation)
+
+Partie2 : (20 points)
+- Prévisions si un patient fume ou non en utilisant plusieurs algorithmes de la classification
+- Comparaison de ces algorithmes
