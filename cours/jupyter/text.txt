@@ -603,3 +603,51 @@ plt.axvline(color = 'b')
 plt.axhline(y = 0.5, color ='k', linestyle ="--")
 plt.text(-12.5, 0.5, '0.5', color='r')
 ```
+TP19_K-Mean Clustering avec cluster de sklearn.ipyn
+### Apprentissage Non-Supervisé avec l'algorithme de K-Mean Clustering de sklearn
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.datasets import make_blobs
+from sklearn.cluster import KMeans
+# Générer des données:
+X, y = make_blobs(n_samples=100, centers = 3)
+#nb_features = 2 par défaut
+plt.scatter(X[:,0], X[:, 1])
+### Entrainer le modele de K-mean Clustering
+model = KMeans(n_clusters=3) # 3 centroïdes 
+model.fit(X)
+### Les centroïdes
+centres = model.cluster_centers_
+### Visualiser les Clusters
+predictions = model.predict(X)
+plt.xlabel("x1")
+plt.ylabel("x2")
+plt.scatter(X[:,0], X[:,1], c=predictions)
+plt.scatter(centres[0,0] , centres[0,1], c='red')#centroïde1
+plt.scatter(centres[1,0] , centres[1,1], c='red')#centroïde2
+plt.scatter(centres[2,0] , centres[2,1], c='red')#centroïde3
+
+TP20_K-Mean Clustering avec cluster de sklearn et un Vrai Dataset.ipynb'
+### Apprentissage Non-Supervisé avec l'algorithme de K-Mean Clustering de sklearn et Vrai Dataset
+
+On suppose qu'on a un Dataset des <b>emails</b> sans <b>target</b>, càd on ne sait pas est ce que les emails sont <b>spam ou non</b>
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+df = pd.read_csv('Dataset/mails2.csv',delimiter=";")
+df.head()
+X1 = df.iloc[:,0].values #colonne des fautes d'orthographe 
+X2 = df.iloc[:,1].values #colonne des nbr des mots-clés déclencheurs
+
+X1 = X1.reshape(len(X1),1) #redimenssionner X1 vers un vecteur colonne
+X2 = X2.reshape(len(X2),1)
+X = np.hstack((X1, X2)) #Concatenation des features
+### Entrainer le modele de K-mean Clustering
+model = KMeans(n_clusters=2) # 2 centroïdes 
+model.fit(X)
+### Visualiser les Clusters
+predictions = model.predict(X)
+plt.xlabel("x1 : fautes d'orthographe")
+plt.ylabel("x2 : nbr des mots-clés déclencheurs")
+plt.scatter(X[:,0], X[:,1], c=predictions)

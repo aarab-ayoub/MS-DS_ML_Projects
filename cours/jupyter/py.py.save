@@ -1,0 +1,4 @@
+def gradiant_decsent(x , y ,theta ,alpha, iter)
+	m = len(y)
+	for _ in range(iter)
+		theta -= alpah * 1/2m 
