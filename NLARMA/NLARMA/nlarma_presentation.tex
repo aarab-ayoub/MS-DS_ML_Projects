@@ -1,0 +1,324 @@
+\documentclass{article}
+
+% --- PACKAGES ---
+\usepackage[a4paper, margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{float}
+\usepackage{tikz} % For the title page design
+
+% --- HYPERLINK SETUP ---
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    filecolor=magenta,      
+    urlcolor=cyan,
+}
+
+% --- CODE LISTING STYLE ---
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+\definecolor{titlebg}{HTML}{1F4E79} % Dark blue for title
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstset{style=mystyle}
+
+
+% --- DOCUMENT START ---
+\begin{document}
+
+% --- FINAL, OFFICIAL TITLE PAGE WITH BORDER AND LOGO ---
+\begin{titlepage}
+
+    % This TikZ code draws a border around the page
+    \begin{tikzpicture}[remember picture, overlay]
+        \draw[line width=0.8pt] 
+            ([xshift=1.5cm, yshift=-1.5cm]current page.north west) 
+            rectangle 
+            ([xshift=-1.5cm, yshift=1.5cm]current page.south east);
+    \end{tikzpicture}
+
+    \begin{center}
+        
+        % --- School Logo ---
+        \includegraphics[height=2.5cm]{logo.png} 
+        
+        \vspace{0.5cm}
+        
+        % --- School Name ---
+        {\Large \bfseries École Normale Supérieure}
+        
+        \vspace{2.5cm}
+        
+        % --- Main Title and Subtitle ---
+        {\Huge \bfseries Enhancing Time Series Forecasting with Nonlinear ARMA Models (NLARMA)}
+        
+        \vspace{0.5cm}
+        
+        {\Large \itshape A Comparative Study with ARMA on Simulated Stock Price Data}
+        
+        \vfill % Pushes the next block down
+        
+        % --- Author and Supervisor Information (side-by-side) ---
+        \begin{minipage}{0.45\textwidth}
+            \begin{flushleft} \large
+                \emph{Presented by:} \\[0.2cm]
+                Ayoub Aarab \\
+                Abdelhamid Merghad
+            \end{flushleft}
+        \end{minipage}
+        \begin{minipage}{0.45\textwidth}
+            \begin{flushright} \large
+                \emph{Supervised by:} \\[0.2cm]
+                Pr.Mohammed Lamarti Sefian
+            \end{flushright}
+        \end{minipage}
+
+        \vfill % Pushes the final block to the bottom
+        
+        % --- Course, Year, and Date Information ---
+        {\large
+        Master Data Science \\
+        Module: Time Series \\[0.5cm]
+        \today
+        }
+        
+    \end{center}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% --- ABSTRACT ---
+\section*{Abstract}
+This report investigates the performance differences between traditional linear ARMA models and nonlinear ARMA (NLARMA) models in time series forecasting. Using a simulated stock price dataset engineered with explicit nonlinearities, we compare an ARIMA(5,0,0) model against a neural network-based NLARMA model. Through performance metrics like RMSE and visual analysis of forecasts and residuals, we demonstrate that the NLARMA model offers a substantial improvement in accuracy. The findings underscore the necessity of employing nonlinear models for complex, real-world systems, and the report concludes with a discussion on model limitations and avenues for future research.
+
+% --- INTRODUCTION ---
+\section{Introduction}
+
+Time series forecasting is an indispensable discipline across a multitude of sectors, including finance, energy management, and healthcare. The ability to accurately predict future values based on historical data is vital for informed strategic planning, efficient resource allocation, and proactive risk management in these dynamic environments. For decades, conventional statistical models have served as the cornerstone of this field.
+
+Traditional time series models, such as the Autoregressive Moving Average (ARMA) family, are built upon a fundamental assumption: that the underlying data generation process is linear. This implies that future values can be adequately explained as simple linear combinations of past observations and error terms. While these models offer simplicity and interpretability, their inherent design imposes a significant constraint.
+
+A growing body of evidence highlights a critical limitation of these linear approaches. Many real-world phenomena exhibit complex, nonlinear behaviors, chaotic dynamics, and sudden shifts that cannot be adequately captured by linear models. For instance, financial markets are characterized by volatility clustering, energy consumption can be highly sensitive to non-linear factors like temperature, and biological signals often display intricate interactions.
+
+This creates a fundamental conflict: the tools designed for a simplified linear world are being applied to an inherently complex, nonlinear reality. This mismatch means that linear models, by their very design, are often systematically incapable of representing the true dynamics of many systems. Their limitations are not merely minor inaccuracies but a fundamental inability to capture the underlying data-generating process, setting the stage for more advanced approaches.
+
+This recognition has spurred the development of more sophisticated, nonlinear models designed to overcome the limitations of their linear predecessors. The objective of this report is to demonstrate the enhanced forecasting capabilities of Nonlinear ARMA (NLARMA) compared to traditional ARMA, specifically using a simulated stock price dataset engineered to exhibit explicit nonlinear characteristics. This comparison aims to underscore the necessity of adopting models that can adapt to the inherent complexity of the data, rather than forcing the data into a predefined linear mold.
+
+
+% --- METHODOLOGY ---
+\newpage
+\section{Methodology}
+
+\subsection{Dataset Analysis}
+The study utilizes a synthetic dataset of 100 daily stock price observations. It was generated using a nonlinear rule to explicitly test the models' ability to capture complex dynamics.
+
+\subsubsection{Data Overview}
+Figure \ref{fig:dataset_overview} shows the time series, which exhibits a clear upward trend along with periodic fluctuations. A vertical dashed line indicates the split between the training set (first 80 observations) and the test set (final 20 observations). Table \ref{tab:snippet} shows a sample of the first five data points.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\textwidth]{dataset_overview.png}
+    \caption{Full time series of the simulated stock price data, with train/test split.}
+    \label{fig:dataset_overview}
+\end{figure}
+
+\begin{table}[H]
+    \centering
+    \caption{First 5 Rows of the Dataset}
+    \label{tab:snippet}
+    \begin{tabular}{@{}lr@{}}
+        \toprule
+        \textbf{Time Step} & \textbf{Simulated\_Stock\_Price} \\
+        \midrule
+        0 & 150.00 \\
+        1 & 150.31 \\
+        2 & 150.98 \\
+        3 & 151.78 \\
+        4 & 152.42 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\newpage
+\subsubsection{Statistical Properties}
+To understand the underlying characteristics of the data, we analyzed its distribution and autocorrelation, shown in Figure \ref{fig:dataset_analysis_plots}.
+\begin{itemize}
+    \item The \textbf{Histogram} shows that the price values are not normally distributed; there appear to be two primary clusters of values.
+    \item The \textbf{Autocorrelation (ACF)} plot shows a very slow decay, which is characteristic of a series with a strong trend.
+    \item The \textbf{Partial Autocorrelation (PACF)} plot is most informative for our AR model. It shows a significant spike at lag 1, followed by another significant spike at lag 5, with values cutting off to insignificance afterward. This provides a strong statistical justification for choosing a look-back period of 5 for our AR and NLARMA models.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\textwidth]{dataset_analysis_plots.png}
+    \caption{Statistical analysis of the time series data.}
+    \label{fig:dataset_analysis_plots}
+\end{figure}
+
+\subsection{Model Architectures}
+\subsubsection{ARMA Benchmark Model}
+A standard linear Autoregressive (AR) model, ARIMA(5, 0, 0), was implemented as a baseline using the \texttt{statsmodels} library.
+
+\newpage
+\subsubsection{NLARMA Model}
+The NLARMA model uses a Multi-layer Perceptron (MLP) neural network. Figure \ref{fig:architecture} illustrates the data flow for the optimized model. It takes the five previous prices as input, processes them through a hidden layer with 100 neurons using the `tanh` activation function, and outputs a single predicted price.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{model_architecture.png}
+    \caption{Architecture of the Optimized NLARMA Model.}
+    \label{fig:architecture}
+\end{figure}
+
+
+\subsubsection{Hyperparameter Optimization}
+A neural network's performance is highly dependent on its configuration, known as hyperparameters. To move beyond a baseline model and find the most effective architecture for our NLARMA model, we employed a systematic optimization process using \texttt{GridSearchCV} from the \texttt{scikit-learn} library.
+
+Grid Search works by defining a "grid" of potential hyperparameter values and then exhaustively training and evaluating a model for every possible combination. To ensure our evaluation was robust and suited for time series data, we used a 3-fold time-series cross-validation strategy. This process systematically identified the combination of parameters that minimized the Root Mean Squared Error (RMSE) on the validation folds.
+
+The parameter grid evaluated was:
+\begin{itemize}
+    \item \textbf{Hidden Layer Sizes}: Testing different network depths and widths with \texttt{[(50,), (100,), (50, 50), (100, 50)]}.
+    \item \textbf{Activation Functions}: Comparing the most common nonlinear functions, \texttt{['relu', 'tanh']}.
+    \item \textbf{Regularization (alpha)}: Evaluating different strengths of L2 regularization to prevent overfitting, with \texttt{[0.0001, 0.001, 0.01]}.
+    \item \textbf{Learning Rate Schedule}: Testing an adaptive learning rate to improve training stability.
+\end{itemize}
+
+The grid search concluded that the optimal configuration for this specific dataset was an MLP with a single hidden layer of 100 neurons, using the `tanh` activation function, and a regularization alpha of `0.0001`. This optimized architecture was used for our final NLARMA model.
+
+% --- RESULTS ---
+\newpage
+\section{Results and Evaluation}
+
+\subsection{Performance Benchmarking}
+The models were evaluated on the test set using Root Mean Squared Error (RMSE). The results in Table \ref{tab:rmse} show a clear progression of improvement.
+
+\begin{table}[H]
+    \centering
+    \caption{RMSE Comparison of Models (Lower is Better)}
+    \label{tab:rmse}
+    \begin{tabular}{@{}lrl@{}}
+        \toprule
+        \textbf{Model} & \textbf{RMSE} & \textbf{Remarks} \\
+        \midrule
+        ARMA (ARIMA(5,0,0)) & 11.6988 & High error due to linearity; performs poorly. \\
+        NLARMA (Un-optimized) & 3.8417 & Captures nonlinearities; substantially better than ARMA. \\
+        \textbf{NLARMA (Optimized)} & \textbf{1.6559} & \textbf{Best result after hyperparameter tuning.} \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+The linear ARMA model serves as a poor baseline (RMSE $\approx$ 11.7). The un-optimized NLARMA model immediately provides a significant improvement (RMSE $\approx$ 3.84). Finally, hyperparameter tuning dramatically reduces the error further to just \textbf{1.66}.
+
+\subsection{Visual Analysis}
+
+\subsubsection{Initial Un-Optimized Model Performance}
+Figure \ref{fig:narma_unoptimized} shows the full forecast of the initial NLARMA model. Figure \ref{fig:narma_unoptimized_detail} provides a zoomed-in view, comparing it with the ARMA model. While far better than ARMA, some deviations from the actual data are visible.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{narma.png}
+    \caption{Un-optimized NLARMA model predictions vs. actual data.}
+    \label{fig:narma_unoptimized}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{narma_model.png}
+    \caption{Zoomed-in comparison of the Un-optimized NLARMA and ARMA models.}
+    \label{fig:narma_unoptimized_detail}
+\end{figure}
+\newpage
+\subsubsection{Optimized Model Performance}
+After optimization, the model's predictions align much more closely with the actual data. Figure \ref{fig:narma_optimized} shows the forecast, and Figure \ref{fig:narma_optimized_detail} confirms that the optimized NLARMA predictions (red dashes) track the true values (green) with impressive accuracy, far surpassing the ARMA model.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{narma_optimize.png}
+    \caption{Optimized NLARMA model predictions vs. actual data.}
+    \label{fig:narma_optimized}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{narma_optimize_detail.png}
+    \caption{Zoomed-in comparison of the Optimized NLARMA and ARMA models.}
+    \label{fig:narma_optimized_detail}
+\end{figure}
+
+\newpage
+\subsubsection{Residual Analysis}
+The residual plot in Figure \ref{fig:residuals} powerfully illustrates the performance gap. The ARMA model's errors are large and systematic. In contrast, the optimized NLARMA model's errors are much smaller and are randomly scattered around the zero line, indicating a well-fitted and unbiased forecast.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{residuals_vs_time.png}
+    \caption{Residuals (Errors) vs. Time for the ARMA and Optimized NLARMA models.}
+    \label{fig:residuals}
+\end{figure}
+
+\subsection{Strengths and Limitations}
+\begin{itemize}
+    \item \textbf{Strengths:} The key strength of the NLARMA model is its \textbf{flexibility and power}. As universal function approximators, neural networks can capture arbitrarily complex nonlinear relationships and interactions within the data. This allows them to create far more accurate and nuanced forecasts for complex systems, which was clearly validated by the significantly lower RMSE in our study.
+    \item \textbf{Limitations:} This power comes with several trade-offs:
+    \begin{itemize}
+        \item \textbf{"Black Box" Nature:} Unlike ARMA, it is difficult to interpret *why* the neural network makes a specific prediction. The complex web of weights and biases does not offer a straightforward explanation, making it less transparent.
+        \item \textbf{Data Requirement:} Neural networks are "data-hungry" and perform best with large datasets. Our dataset of 100 points is very small for a neural network, which increases the risk that the model might not generalize well to patterns it has not seen before.
+        \item \textbf{Computational Cost:} The process of training a neural network, and especially running a comprehensive grid search for hyperparameter optimization, is far more computationally intensive and time-consuming than fitting an ARMA model.
+        \item \textbf{Risk of Overfitting:} With their high flexibility, neural networks are more prone to overfitting—learning the noise in the training data rather than the underlying signal. While techniques like regularization and cross-validation mitigate this risk, it remains a key concern, especially with limited data.
+    \end{itemize}
+\end{itemize}
+
+
+\subsection{Future Work}
+This research could be extended in several promising directions:
+\begin{itemize}
+    \item \textbf{Advanced Architectures}: Implementing more sophisticated recurrent neural networks (RNNs) like Long Short-Term Memory (LSTM) or Gated Recurrent Units (GRU), which are specifically designed for sequence data, could yield even better performance.
+    \item \textbf{Feature Engineering}: The current model only uses lagged prices as input. Incorporating additional features, such as moving averages, price volatility, or external market indicators, could provide the model with more context and improve its predictive power.
+    \item \textbf{Larger Dataset}: The most crucial next step would be to train and evaluate the model on a much larger dataset (e.g., several years of daily prices) to ensure its robustness and test its generalizability over different market conditions.
+\end{itemize}
+
+% --- CONCLUSION ---
+\section{Conclusion}
+In this comparative study, the nonlinear ARMA approach, implemented with a neural network, showed clear and significant advantages for forecasting a nonlinear time series. The optimized NLARMA model achieved an RMSE that was nearly 7 times lower than the linear ARMA benchmark. This demonstrates that for complex systems, allowing for nonlinearity is crucial for accuracy. The visual and residual analyses confirm that the NLARMA model not only produces lower overall error but also creates a more reliable and unbiased forecast. While NLARMA models require more careful tuning, their superior predictive power makes them an essential tool for modern time series analysis.
+
+% --- REFERENCES ---
+\begin{thebibliography}{9}
+    \bibitem{yinka2023}
+    Yinka-Banjo, C. O., \& Akinyemi, M. I. (2023). 
+    \textit{Stock Market Prediction Using a Hybrid of Deep Learning Models}. 
+    International Journal of Financial Studies, Economics and Management, 2(2), 1–16.
+
+    \bibitem{stojkoska2022}
+    Stojkoska, B., Taskovska, K., \& Utkovski, Z. (2022). 
+    \textit{Time Series Prediction with Neural Networks: A Review}. 
+    In 2022 57th International Scientific Conference on Information, Communication and Energy Systems and Technologies (ICEST) (pp. 1–4). IEEE.
+\end{thebibliography}
+
+\end{document}
