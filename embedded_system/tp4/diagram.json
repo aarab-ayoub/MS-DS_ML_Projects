@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "author": "AYAARAB",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-arduino-uno", "id": "arduinoUno", "top": 403.8, "left": -0.6, "attrs": {} },
+    { "type": "wokwi-breadboard", "id": "breadboard1", "top": -60.6, "left": -131.6, "attrs": {} },
+    {
+      "type": "wokwi-hc-sr04",
+      "id": "ultrasonicSensor1",
+      "top": -209.7,
+      "left": 379.9,
+      "attrs": { "distance": "55" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "ledIndicator",
+      "top": 10.8,
+      "left": 61,
+      "attrs": { "color": "blue" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "resistor1",
+      "top": 139.2,
+      "left": -28.8,
+      "rotate": 90,
+      "attrs": { "value": "330" }
+    },
+    {
+      "type": "wokwi-buzzer",
+      "id": "soundBuzzer",
+      "top": -26.4,
+      "left": 129.6,
+      "attrs": { "volume": "0.3" }
+    },
+    {
+      "type": "wokwi-potentiometer",
+      "id": "potControl",
+      "top": 123.5,
+      "left": 335.8,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-text",
+      "id": "textDisplay",
+      "top": -153.6,
+      "left": -124.8,
+      "attrs": { "text": "Ultrasonic Distance Sensor" }
+    }
+  ],
+  "connections": [
+    [ "arduinoUno:GND.1", "breadboard1:bn.3", "black", [ "v-38.4", "h-100.2" ] ],
+    [ "arduinoUno:5V", "breadboard1:bp.2", "red", [ "v-28.8", "h-91.8" ] ],
+    [ "ultrasonicSensor1:VCC", "breadboard1:bp.25", "red", [ "v48", "h-111.6" ] ],
+    [ "ultrasonicSensor1:GND", "breadboard1:bn.24", "black", [ "v38.4", "h-92.4" ] ],
+    [
+      "ultrasonicSensor1:TRIG",
+      "arduinoUno:9",
+      "green",
+      [ "v124.8", "h40.4", "v124.8", "h-163.2" ]
+    ],
+    [
+      "ultrasonicSensor1:ECHO",
+      "arduinoUno:10",
+      "purple",
+      [ "v134.4", "h54", "v124.8", "h-185.6" ]
+    ],
+    [ "ledIndicator:C", "breadboard1:bn.14", "black", [ "v0" ] ],
+    [ "ledIndicator:A", "resistor1:1", "green", [ "v57.6", "h-85.2" ] ],
+    [ "resistor1:2", "arduinoUno:7", "green", [ "v67.2", "h41.6" ] ],
+    [ "soundBuzzer:1", "breadboard1:bn.18", "black", [ "v0" ] ],
+    [ "soundBuzzer:2", "arduinoUno:8", "orange", [ "v105.6", "h-221.2" ] ],
+    [ "potControl:GND", "breadboard1:bn.48", "black", [ "v19.2", "h-78" ] ],
+    [ "potControl:VCC", "breadboard1:bp.48", "red", [ "v28.8", "h-72.2" ] ],
+    [ "potControl:SIG", "arduinoUno:A0", "blue", [ "v76.8", "h-154" ] ]
+  ],
+  "dependencies": {}
+}
