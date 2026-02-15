@@ -3,3 +3,9 @@ BigData/*.zip
 .DS_Store
 *.zip
 NLARMA/.venv
+
+Deeplearning_project/.venv
+Deeplearning_project/2/*
+Deeplearning_project/1/*
+Deeplearning_project/.DS_Store
+Deeplearning_project/*.pth
