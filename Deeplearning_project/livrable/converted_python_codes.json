@@ -1,0 +1,26 @@
+[
+    {
+        "sample": 1,
+        "python_code": "```\nVAR_1 = 80\nVAR_7 = 94\nVAR_1 += 110\nVAR_3 = VAR_7 / VAR_1\n```"
+    },
+    {
+        "sample": 2,
+        "python_code": "```\nVAR_8 = 104\nVAR_4 = 25\nVAR_7 = VAR_8 / 60\nVAR_7 = VAR_4 - VAR_7\n```"
+    },
+    {
+        "sample": 3,
+        "python_code": "```\nLIST_5 = [50, 42, 47, 15, 99, 39, 66, 10]\nVAR_0 = len(LIST_5)"
+    },
+    {
+        "sample": 4,
+        "python_code": "```\nLIST_9 = [22, 85, 68, 83, 48]\nVAR_1 = 1\nfor IDX_6 in LIST_9:\n    VAR_1 *= LIST_9[IDX_6]\n```"
+    },
+    {
+        "sample": 5,
+        "python_code": "```\nVAR_5 = 102\nVAR_1 = 66\nVAR_2 = VAR_5 / 47\nVAR_4 = VAR_1 % VAR_2\n```"
+    },
+    {
+        "sample": 6,
+        "python_code": "```\nLIST_1 = [82, 27, 77, 62, 79]\nVAR_4 = 0\nfor idx_2 in LIST_1:\n    VAR_4 += idx_2\n```"
+    }
+]
