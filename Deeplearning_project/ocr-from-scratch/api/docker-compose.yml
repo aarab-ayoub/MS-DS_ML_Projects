@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  ocr-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ocr-from-scratch:latest
+    container_name: ocr-api
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount the model checkpoint and vocabulary labels into the container
+      - ../results/best_mps_model.pth:/data/best_mps_model.pth:ro
+      - ../ocr_data/dataset/labels.csv:/data/labels.csv:ro
+    environment:
+      OCR_WEIGHTS: /data/best_mps_model.pth
+      OCR_LABELS:  /data/labels.csv
+    restart: unless-stopped

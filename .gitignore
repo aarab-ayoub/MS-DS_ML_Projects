@@ -4,10 +4,11 @@ BigData/*.zip
 *.zip
 NLARMA/.venv
 
-Deeplearning_project/.venv
-Deeplearning_project/2/*
-Deeplearning_project/1/*
+Deeplearning_project/.venv/
+Deeplearning_project/ocr_data/
 Deeplearning_project/.DS_Store
-Deeplearning_project/*.pth
-Deeplearning_project/livrable/*.pth
+# Model weights — large binary files, not tracked in Git
+Deeplearning_project/**/*.pth
+# OCR results (regenerated after training)
+Deeplearning_project/ocr-from-scratch/results/best_mps_model.pth
 
