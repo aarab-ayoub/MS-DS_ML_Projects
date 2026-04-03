@@ -1,0 +1,904 @@
+cat src/core/config.py
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Dict, List
+
+import numpy as np
+
+# Canonical hidden health states used across DTMC/CTMC/HMM/MDP/RL/POMDP.
+STATES: List[str] = [
+    "Healthy",
+    "Degraded",
+    "MaintenanceRequired",
+    "FailedRecoverable",
+    "FailedPermanent",
+]
+
+ACTIONS: List[str] = [
+    "keep_running",
+    "power_cap",
+    "checkpoint",
+    "reboot",
+    "isolate_maintain",
+]
+
+STATE_TO_IDX: Dict[str, int] = {name: i for i, name in enumerate(STATES)}
+ACTION_TO_IDX: Dict[str, int] = {name: i for i, name in enumerate(ACTIONS)}
+
+BASE_TRANSITION = np.array(
+    [
+        [0.90, 0.06, 0.02, 0.01, 0.01],
+        [0.15, 0.70, 0.10, 0.05, 0.00],
+        [0.40, 0.00, 0.40, 0.15, 0.05],
+        [0.35, 0.00, 0.20, 0.40, 0.05],
+        [0.00, 0.00, 0.00, 0.00, 1.00],
+    ],
+    dtype=float,
+)
+
+# Off-diagonal CTMC intensities; diagonal set automatically.
+BASE_GENERATOR = np.array(
+    [
+        [0.00, 0.06, 0.02, 0.01, 0.01],
+        [0.15, 0.00, 0.10, 0.05, 0.00],
+        [0.40, 0.00, 0.00, 0.15, 0.05],
+        [0.35, 0.00, 0.20, 0.00, 0.05],
+        [0.00, 0.00, 0.00, 0.00, 0.00],
+    ],
+    dtype=float,
+)
+
+# Simple action effects on key transitions (multiplicative factors).
+ACTION_EFFECTS = {
+    "keep_running": {},
+    "power_cap": {(1, 3): 0.75, (2, 3): 0.80, (0, 1): 0.90},
+    "checkpoint": {(3, 4): 0.85},
+    "reboot": {(3, 0): 1.40, (3, 3): 0.65, (3, 4): 0.80},
+    "isolate_maintain": {(2, 0): 1.25, (2, 3): 0.70, (2, 4): 0.75},
+}
+
+EMISSION_PARAMS = {
+    "Healthy": {
+        "temperature": (63.0, 3.0),
+        "utilization": (87.0, 5.0),
+        "power_usage": (590.0, 35.0),
+        "ecc_lambda": 0.2,
+        "xid_probs": [0.97, 0.02, 0.01, 0.00],
+        "retired_pages_lambda": 0.02,
+    },
+    "Degraded": {
+        "temperature": (71.0, 4.0),
+        "utilization": (80.0, 8.0),
+        "power_usage": (620.0, 45.0),
+        "ecc_lambda": 1.5,
+        "xid_probs": [0.80, 0.12, 0.07, 0.01],
+        "retired_pages_lambda": 0.2,
+    },
+    "MaintenanceRequired": {
+        "temperature": (76.0, 4.5),
+        "utilization": (72.0, 10.0),
+        "power_usage": (640.0, 55.0),
+        "ecc_lambda": 4.0,
+        "xid_probs": [0.55, 0.20, 0.20, 0.05],
+        "retired_pages_lambda": 0.7,
+    },
+    "FailedRecoverable": {
+        "temperature": (68.0, 7.0),
+        "utilization": (25.0, 20.0),
+        "power_usage": (300.0, 120.0),
+        "ecc_lambda": 7.0,
+        "xid_probs": [0.15, 0.20, 0.35, 0.30],
+        "retired_pages_lambda": 1.2,
+    },
+    "FailedPermanent": {
+        "temperature": (40.0, 10.0),
+        "utilization": (2.0, 5.0),
+        "power_usage": (60.0, 40.0),
+        "ecc_lambda": 10.0,
+        "xid_probs": [0.05, 0.10, 0.25, 0.60],
+        "retired_pages_lambda": 2.0,
+    },
+}
+
+XID_CODES = [0, 31, 48, 79]
+
+
+@dataclass
+class RewardWeights:
+    uptime: float = 1.0
+    failure: float = 15.0
+    recovery: float = 3.0
+    action: float = 1.0
+
+
+@dataclass
+class ProjectConfig:
+    seed: int = 7
+    dt_hours: float = 1.0
+    horizon_steps: int = 300
+    ctmc_horizon_hours: float = 240.0
+    gamma: float = 0.95
+    rl_episodes: int = 300
+    rl_max_steps: int = 500
+    td_eval_episodes: int = 300
+    reward_weights: RewardWeights = field(default_factory=RewardWeights)
+
+
+def build_generator(off_diag: np.ndarray) -> np.ndarray:
+    """Return a valid generator matrix from off-diagonal intensities."""
+    a = off_diag.copy().astype(float)
+    np.fill_diagonal(a, 0.0)
+    row_sums = a.sum(axis=1)
+    for i in range(a.shape[0]):
+        a[i, i] = -row_sums[i]
+    return a
+
+(.venv) (base) ayoub@ayoubs-MacBook-Pro MS-DS_ML_Projects/ml_probabilistic (main) » cat src/main.py
+from __future__ import annotations
+
+import argparse
+import os
+
+from .core.config import ProjectConfig
+from .pipeline.experiments import run_all, summarize
+from .pipeline.plots import plot_ct_reliability, plot_learning_curves, plot_state_counts
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="GPU cluster probabilistic reliability project")
+    parser.add_argument("--mode", choices=["quick", "full"], default="quick")
+    parser.add_argument("--out", default="../results")
+    parser.add_argument("--horizon-steps", type=int, default=None)
+    parser.add_argument("--ct-hours", type=float, default=None)
+    parser.add_argument("--rl-episodes", type=int, default=None)
+    parser.add_argument("--rl-max-steps", type=int, default=None)
+    parser.add_argument("--td-eval-episodes", type=int, default=None)
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+
+    cfg = ProjectConfig()
+    if args.mode == "quick":
+        cfg.horizon_steps = 120
+        cfg.ctmc_horizon_hours = 72.0
+        cfg.rl_episodes = 180
+        cfg.td_eval_episodes = 180
+
+    if args.horizon_steps is not None:
+        cfg.horizon_steps = args.horizon_steps
+    if args.ct_hours is not None:
+        cfg.ctmc_horizon_hours = args.ct_hours
+    if args.rl_episodes is not None:
+        cfg.rl_episodes = args.rl_episodes
+    if args.rl_max_steps is not None:
+        cfg.rl_max_steps = args.rl_max_steps
+    if args.td_eval_episodes is not None:
+        cfg.td_eval_episodes = args.td_eval_episodes
+
+    results = run_all(cfg)
+
+    out_dir = os.path.abspath(args.out)
+    os.makedirs(out_dir, exist_ok=True)
+
+    summary = summarize(results)
+    summary_path = os.path.join(out_dir, "summary.csv")
+    summary.to_csv(summary_path, index=False)
+
+    plot_state_counts(results["dt_trace"], os.path.join(out_dir, "state_counts.png"))
+    plot_ct_reliability(results["ct_time_grid"], results["ct_probabilities"], os.path.join(out_dir, "ct_reliability.png"))
+    plot_learning_curves(
+        results["q_learning_returns"],
+        results["sarsa_returns"],
+        os.path.join(out_dir, "rl_returns.png"),
+    )
+
+    print(f"Saved summary to: {summary_path}")
+
+
+if __name__ == "__main__":
+    main()
+(.venv) (base) ayoub@ayoubs-MacBook-Pro MS-DS_ML_Projects/ml_probabilistic (main) » cat src/models/ctmc.py           
+from __future__ import annotations
+
+import numpy as np
+from scipy.linalg import expm
+
+
+def validate_generator(a: np.ndarray) -> None:
+    if a.ndim != 2 or a.shape[0] != a.shape[1]:
+        raise ValueError("Generator must be square.")
+    off_diag = a.copy()
+    np.fill_diagonal(off_diag, 0.0)
+    if np.any(off_diag < -1e-12):
+        raise ValueError("Off-diagonal intensities must be non-negative.")
+    if not np.allclose(a.sum(axis=1), 0.0, atol=1e-8):
+        raise ValueError("Each row of generator must sum to 0.")
+
+
+def transition_matrix(a: np.ndarray, t: float) -> np.ndarray:
+    validate_generator(a)
+    if t < 0:
+        raise ValueError("Time t must be non-negative")
+    return expm(a * t)
+
+
+def distribution_at_time(pi0: np.ndarray, a: np.ndarray, t: float) -> np.ndarray:
+    pi0 = np.asarray(pi0, dtype=float)
+    if not np.isclose(pi0.sum(), 1.0):
+        raise ValueError("Initial distribution must sum to 1.")
+    return pi0 @ transition_matrix(a, t)
+
+
+def trajectory(pi0: np.ndarray, a: np.ndarray, time_grid: np.ndarray) -> np.ndarray:
+    probs = []
+    for t in time_grid:
+        probs.append(distribution_at_time(pi0, a, float(t)))
+    return np.vstack(probs)
+
+
+def survival_probability(pi_t: np.ndarray, failed_idx: int) -> np.ndarray:
+    return 1.0 - pi_t[:, failed_idx]
+(.venv) (base) ayoub@ayoubs-MacBook-Pro MS-DS_ML_Projects/ml_probabilistic (main) » cat src/models/dtmc.py 
+from __future__ import annotations
+
+import numpy as np
+
+
+def validate_transition_matrix(p: np.ndarray) -> None:
+    if p.ndim != 2 or p.shape[0] != p.shape[1]:
+        raise ValueError("Transition matrix must be square.")
+    if np.any(p < -1e-12):
+        raise ValueError("Transition matrix has negative entries.")
+    if not np.allclose(p.sum(axis=1), 1.0, atol=1e-8):
+        raise ValueError("Each row of transition matrix must sum to 1.")
+
+
+def n_step_transition(p: np.ndarray, n: int) -> np.ndarray:
+    validate_transition_matrix(p)
+    if n < 0:
+        raise ValueError("n must be non-negative")
+    return np.linalg.matrix_power(p, n)
+
+
+def distribution_after_n_steps(pi0: np.ndarray, p: np.ndarray, n: int) -> np.ndarray:
+    validate_transition_matrix(p)
+    pi0 = np.asarray(pi0, dtype=float)
+    if not np.isclose(pi0.sum(), 1.0):
+        raise ValueError("Initial distribution must sum to 1.")
+    return pi0 @ n_step_transition(p, n)
+
+
+def fundamental_matrix(p: np.ndarray, transient_idx: list[int]) -> np.ndarray:
+    validate_transition_matrix(p)
+    q = p[np.ix_(transient_idx, transient_idx)]
+    i = np.eye(q.shape[0])
+    return np.linalg.inv(i - q)
+
+
+def expected_steps_to_absorption(p: np.ndarray, transient_idx: list[int]) -> np.ndarray:
+    n = fundamental_matrix(p, transient_idx)
+    ones = np.ones((n.shape[0], 1))
+    return (n @ ones).ravel()
+
+
+def stationary_distribution_power(p: np.ndarray, max_iter: int = 5000, tol: float = 1e-10) -> np.ndarray:
+    validate_transition_matrix(p)
+    k = p.shape[0]
+    pi = np.ones(k) / k
+    for _ in range(max_iter):
+        pi_next = pi @ p
+        if np.max(np.abs(pi_next - pi)) < tol:
+            return pi_next
+        pi = pi_next
+    return pi
+(.venv) (base) ayoub@ayoubs-MacBook-Pro MS-DS_ML_Projects/ml_probabilistic (main) » cat src/models/hmm_continuous.py 
+from __future__ import annotations
+
+from typing import Dict, List, Optional
+
+import numpy as np
+
+from .ctmc import transition_matrix
+from .hmm_discrete import emission_log_prob
+
+
+def ct_hmm_filter(
+    observations: List[Dict[str, float]],
+    times: List[float],
+    generator: np.ndarray,
+    pi0: np.ndarray,
+    scalar_key: Optional[str] = None,
+) -> np.ndarray:
+    """Forward filtering for CT hidden chain observed at irregular timestamps."""
+    if len(observations) != len(times):
+        raise ValueError("observations and times must have the same length")
+
+    n_states = generator.shape[0]
+    t_max = len(times)
+    post = np.zeros((t_max, n_states), dtype=float)
+
+    belief = pi0.astype(float).copy()
+    belief /= belief.sum()
+
+    for t in range(t_max):
+        if t > 0:
+            dt = float(times[t] - times[t - 1])
+            p_dt = transition_matrix(generator, dt)
+            belief = belief @ p_dt
+
+        likelihood = np.zeros(n_states, dtype=float)
+        for s in range(n_states):
+            likelihood[s] = np.exp(emission_log_prob(s, observations[t], scalar_key))
+
+        belief = belief * likelihood
+        z = belief.sum()
+        if z <= 1e-15:
+            belief = np.ones(n_states) / n_states
+        else:
+            belief /= z
+        post[t] = belief
+
+    return post
+(.venv) (base) ayoub@ayoubs-MacBook-Pro MS-DS_ML_Projects/ml_probabilistic (main) » cat src/models/hmm_discrete.py 
+from __future__ import annotations
+
+import math
+from typing import Dict, List, Optional
+
+import numpy as np
+
+from ..core.config import EMISSION_PARAMS, STATE_TO_IDX, STATES, XID_CODES
+
+
+def _log_gaussian(x: float, mu: float, sigma: float) -> float:
+    sigma = max(1e-6, sigma)
+    return -0.5 * math.log(2 * math.pi * sigma * sigma) - 0.5 * ((x - mu) / sigma) ** 2
+
+
+def _log_poisson(k: int, lam: float) -> float:
+    lam = max(1e-8, lam)
+    return k * math.log(lam) - lam - math.lgamma(k + 1)
+
+
+def _log_categorical(x: int, values: List[int], probs: List[float]) -> float:
+    if x not in values:
+        return math.log(1e-12)
+    idx = values.index(x)
+    return math.log(max(1e-12, probs[idx]))
+
+
+def emission_log_prob(state_idx: int, obs: Dict[str, float], scalar_key: Optional[str] = None) -> float:
+    params = EMISSION_PARAMS[STATES[state_idx]]
+
+    if scalar_key == "ecc_count":
+        return _log_poisson(int(obs["ecc_count"]), params["ecc_lambda"])
+    if scalar_key == "temperature":
+        mu, sigma = params["temperature"]
+        return _log_gaussian(float(obs["temperature"]), mu, sigma)
+
+    temp_mu, temp_sigma = params["temperature"]
+    util_mu, util_sigma = params["utilization"]
+    p_mu, p_sigma = params["power_usage"]
+
+    ll = 0.0
+    ll += _log_gaussian(float(obs["temperature"]), temp_mu, temp_sigma)
+    ll += _log_poisson(int(obs["ecc_count"]), params["ecc_lambda"])
+    ll += _log_categorical(int(obs["xid_code"]), XID_CODES, params["xid_probs"])
+    ll += _log_gaussian(float(obs["utilization"]), util_mu, util_sigma)
+    ll += _log_gaussian(float(obs["power_usage"]), p_mu, p_sigma)
+    ll += _log_poisson(int(obs["retired_pages"]), params["retired_pages_lambda"])
+    return ll
+
+
+def _logsumexp(x: np.ndarray) -> float:
+    m = np.max(x)
+    return m + math.log(np.sum(np.exp(x - m)))
+
+
+def viterbi(
+    observations: List[Dict[str, float]],
+    transition: np.ndarray,
+    pi0: np.ndarray,
+    scalar_key: Optional[str] = None,
+) -> List[int]:
+    n_states = transition.shape[0]
+    t_max = len(observations)
+
+    log_t = np.log(np.clip(transition, 1e-12, None))
+    log_pi0 = np.log(np.clip(pi0, 1e-12, None))
+
+    dp = np.full((t_max, n_states), -np.inf)
+    back = np.zeros((t_max, n_states), dtype=int)
+
+    for s in range(n_states):
+        dp[0, s] = log_pi0[s] + emission_log_prob(s, observations[0], scalar_key)
+
+    for t in range(1, t_max):
+        for s in range(n_states):
+            scores = dp[t - 1] + log_t[:, s]
+            best_prev = int(np.argmax(scores))
+            dp[t, s] = scores[best_prev] + emission_log_prob(s, observations[t], scalar_key)
+            back[t, s] = best_prev
+
+    path = [int(np.argmax(dp[-1]))]
+    for t in range(t_max - 1, 0, -1):
+        path.append(int(back[t, path[-1]]))
+    path.reverse()
+    return path
+
+
+def forward_filter(
+    observations: List[Dict[str, float]],
+    transition: np.ndarray,
+    pi0: np.ndarray,
+    scalar_key: Optional[str] = None,
+) -> np.ndarray:
+    n_states = transition.shape[0]
+    t_max = len(observations)
+    log_t = np.log(np.clip(transition, 1e-12, None))
+
+    alpha = np.full((t_max, n_states), -np.inf)
+    for s in range(n_states):
+        alpha[0, s] = math.log(max(1e-12, pi0[s])) + emission_log_prob(s, observations[0], scalar_key)
+
+    for t in range(1, t_max):
+        for s in range(n_states):
+            alpha[t, s] = _logsumexp(alpha[t - 1] + log_t[:, s]) + emission_log_prob(
+                s, observations[t], scalar_key
+            )
+
+    post = np.zeros_like(alpha)
+    for t in range(t_max):
+        z = _logsumexp(alpha[t])
+        post[t] = np.exp(alpha[t] - z)
+    return post
+
+
+def decode_states_to_names(path: List[int]) -> List[str]:
+    return [STATES[i] for i in path]
+(.venv) (base) ayoub@ayoubs-MacBook-Pro MS-DS_ML_Projects/ml_probabilistic (main) » cat src/models/mdp.py 
+from __future__ import annotations
+
+import numpy as np
+
+
+def value_iteration(
+    transitions: np.ndarray,
+    rewards: np.ndarray,
+    gamma: float = 0.95,
+    tol: float = 1e-8,
+    max_iter: int = 10_000,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Solve finite-state/action MDP with value iteration.
+
+    transitions shape: (n_actions, n_states, n_states)
+    rewards shape: (n_actions, n_states)
+    """
+    n_actions, n_states, _ = transitions.shape
+    v = np.zeros(n_states, dtype=float)
+
+    for _ in range(max_iter):
+        q = np.zeros((n_actions, n_states), dtype=float)
+        for a in range(n_actions):
+            q[a] = rewards[a] + gamma * transitions[a] @ v
+        v_next = q.max(axis=0)
+        if np.max(np.abs(v_next - v)) < tol:
+            v = v_next
+            break
+        v = v_next
+
+    policy = q.argmax(axis=0)
+    return v, policy
+(.venv) (base) ayoub@ayoubs-MacBook-Pro MS-DS_ML_Projects/ml_probabilistic (main) » cat src/models/non_markov.py 
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import numpy as np
+
+
+@dataclass
+class MemoryFeature:
+    age_since_maintenance: int = 0
+    rolling_ecc: float = 0.0
+
+
+
+def update_memory_feature(mem: MemoryFeature, ecc_count: int, maintenance_done: bool) -> MemoryFeature:
+    if maintenance_done:
+        return MemoryFeature(age_since_maintenance=0, rolling_ecc=0.5 * mem.rolling_ecc)
+    return MemoryFeature(
+        age_since_maintenance=mem.age_since_maintenance + 1,
+        rolling_ecc=0.9 * mem.rolling_ecc + float(ecc_count),
+    )
+
+
+def risk_multiplier(mem: MemoryFeature) -> float:
+    age_factor = 1.0 + min(0.5, mem.age_since_maintenance / 1000.0)
+    ecc_factor = 1.0 + min(0.7, mem.rolling_ecc / 50.0)
+    return age_factor * ecc_factor
+
+
+def apply_non_markov_adjustment(transition_row: np.ndarray, mem: MemoryFeature, fail_idx: int) -> np.ndarray:
+    row = transition_row.copy().astype(float)
+    mult = risk_multiplier(mem)
+    row[fail_idx] *= mult
+    row = np.clip(row, 1e-12, None)
+    row /= row.sum()
+    return row
+(.venv) (base) ayoub@ayoubs-MacBook-Pro MS-DS_ML_Projects/ml_probabilistic (main) » cat src/models/pomdp.py 
+from __future__ import annotations
+
+import numpy as np
+
+
+def belief_update(
+    belief: np.ndarray,
+    transition_a: np.ndarray,
+    observation_likelihood: np.ndarray,
+) -> np.ndarray:
+    """Single-step POMDP belief update for one action and one received observation."""
+    pred = belief @ transition_a
+    nxt = pred * observation_likelihood
+    z = nxt.sum()
+    if z <= 1e-15:
+        return np.ones_like(belief) / belief.size
+    return nxt / z
+
+
+def greedy_action_from_belief(
+    belief: np.ndarray,
+    transitions: np.ndarray,
+    rewards: np.ndarray,
+    value: np.ndarray,
+    gamma: float,
+) -> int:
+    n_actions = transitions.shape[0]
+    scores = np.zeros(n_actions, dtype=float)
+    for a in range(n_actions):
+        immediate = np.dot(belief, rewards[a])
+        future = np.dot(belief @ transitions[a], value)
+        scores[a] = immediate + gamma * future
+    return int(np.argmax(scores))
+(.venv) (base) ayoub@ayoubs-MacBook-Pro MS-DS_ML_Projects/ml_probabilistic (main) » cat src/models/rl.py   
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Tuple
+
+import numpy as np
+
+
+@dataclass
+class RLEnv:
+    transitions: np.ndarray  # (A, S, S)
+    rewards: np.ndarray  # (A, S)
+    terminal_state: int
+    seed: int = 0
+
+    def __post_init__(self) -> None:
+        self.rng = np.random.default_rng(self.seed)
+        self.n_actions, self.n_states, _ = self.transitions.shape
+
+    def reset(self, start_state: int = 0) -> int:
+        self.s = start_state
+        return self.s
+
+    def step(self, a: int) -> Tuple[int, float, bool]:
+        p = self.transitions[a, self.s]
+        s_next = int(self.rng.choice(self.n_states, p=p))
+        r = float(self.rewards[a, self.s])
+        done = s_next == self.terminal_state
+        self.s = s_next
+        return s_next, r, done
+
+
+def epsilon_greedy(q: np.ndarray, s: int, eps: float, rng: np.random.Generator) -> int:
+    if rng.random() < eps:
+        return int(rng.integers(0, q.shape[1]))
+    return int(np.argmax(q[s]))
+
+
+def q_learning(
+    env: RLEnv,
+    episodes: int = 300,
+    alpha: float = 0.1,
+    gamma: float = 0.95,
+    epsilon: float = 0.1,
+    max_steps: int = 500,
+) -> tuple[np.ndarray, np.ndarray]:
+    q = np.zeros((env.n_states, env.n_actions), dtype=float)
+    returns = np.zeros(episodes, dtype=float)
+
+    rng = np.random.default_rng(env.seed + 10)
+    for ep in range(episodes):
+        s = env.reset(0)
+        total = 0.0
+        for _ in range(max_steps):
+            a = epsilon_greedy(q, s, epsilon, rng)
+            s_next, r, done = env.step(a)
+            total += r
+            q[s, a] += alpha * (r + gamma * np.max(q[s_next]) - q[s, a])
+            s = s_next
+            if done:
+                break
+        returns[ep] = total
+    return q, returns
+
+
+def sarsa(
+    env: RLEnv,
+    episodes: int = 300,
+    alpha: float = 0.1,
+    gamma: float = 0.95,
+    epsilon: float = 0.1,
+    max_steps: int = 500,
+) -> tuple[np.ndarray, np.ndarray]:
+    q = np.zeros((env.n_states, env.n_actions), dtype=float)
+    returns = np.zeros(episodes, dtype=float)
+
+    rng = np.random.default_rng(env.seed + 20)
+    for ep in range(episodes):
+        s = env.reset(0)
+        a = epsilon_greedy(q, s, epsilon, rng)
+        total = 0.0
+        for _ in range(max_steps):
+            s_next, r, done = env.step(a)
+            total += r
+            a_next = epsilon_greedy(q, s_next, epsilon, rng)
+            q[s, a] += alpha * (r + gamma * q[s_next, a_next] - q[s, a])
+            s, a = s_next, a_next
+            if done:
+                break
+        returns[ep] = total
+    return q, returns
+
+
+def td0_policy_evaluation(
+    env: RLEnv,
+    policy: np.ndarray,
+    episodes: int = 300,
+    alpha: float = 0.1,
+    gamma: float = 0.95,
+    max_steps: int = 500,
+) -> np.ndarray:
+    v = np.zeros(env.n_states, dtype=float)
+    for _ in range(episodes):
+        s = env.reset(0)
+        for _ in range(max_steps):
+            a = int(policy[s])
+            s_next, r, done = env.step(a)
+            v[s] += alpha * (r + gamma * v[s_next] - v[s])
+            s = s_next
+            if done:
+                break
+    return v
+
+
+def td_lambda_policy_evaluation(
+    env: RLEnv,
+    policy: np.ndarray,
+    lam: float = 0.8,
+    episodes: int = 300,
+    alpha: float = 0.05,
+    gamma: float = 0.95,
+    max_steps: int = 500,
+) -> np.ndarray:
+    v = np.zeros(env.n_states, dtype=float)
+    for _ in range(episodes):
+        e = np.zeros(env.n_states, dtype=float)
+        s = env.reset(0)
+        for _ in range(max_steps):
+            a = int(policy[s])
+            s_next, r, done = env.step(a)
+            delta = r + gamma * v[s_next] - v[s]
+            e[s] += 1.0
+            v += alpha * delta * e
+            e *= gamma * lam
+            s = s_next
+            if done:
+                break
+    return v
+
+
+def r_learning(
+    env: RLEnv,
+    episodes: int = 300,
+    alpha: float = 0.1,
+    beta: float = 0.01,
+    epsilon: float = 0.1,
+    max_steps: int = 500,
+) -> tuple[np.ndarray, float, np.ndarray]:
+    """Average-reward R-learning (optional extension).
+
+    Returns:
+        q: action-value table
+        rho: estimated average reward
+        avg_rewards: episode mean rewards
+    """
+    q = np.zeros((env.n_states, env.n_actions), dtype=float)
+    rho = 0.0
+    avg_rewards = np.zeros(episodes, dtype=float)
+
+    rng = np.random.default_rng(env.seed + 30)
+    for ep in range(episodes):
+        s = env.reset(0)
+        rewards_ep = []
+        for _ in range(max_steps):
+            a = epsilon_greedy(q, s, epsilon, rng)
+            s_next, r, done = env.step(a)
+            rewards_ep.append(r)
+
+            td = r - rho + np.max(q[s_next]) - q[s, a]
+            q[s, a] += alpha * td
+
+            greedy_a = int(np.argmax(q[s]))
+            if a == greedy_a:
+                rho += beta * td
+
+            s = s_next
+            if done:
+                break
+
+        avg_rewards[ep] = float(np.mean(rewards_ep)) if rewards_ep else 0.0
+
+    return q, float(rho), avg_rewards
+
+(.venv) (base) ayoub@ayoubs-MacBook-Pro MS-DS_ML_Projects/ml_probabilistic (main) » cat src/pipeline/experiments.py 
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+
+from ..core.config import (
+    ACTIONS,
+    ACTION_EFFECTS,
+    BASE_GENERATOR,
+    BASE_TRANSITION,
+    ProjectConfig,
+    STATES,
+    build_generator,
+)
+from ..models.ctmc import trajectory
+from ..models.dtmc import expected_steps_to_absorption
+from ..models.hmm_continuous import ct_hmm_filter
+from ..models.hmm_discrete import forward_filter, viterbi
+from ..models.mdp import value_iteration
+from ..models.rl import RLEnv, q_learning, r_learning, sarsa, td0_policy_evaluation, td_lambda_policy_evaluation
+from .simulated_data import generate_ctmc_trace, generate_dtmc_trace
+
+
+#cette fonction génère les matrices de transition pour chaque action en appliquant les effets d'action définis dans ACTION_EFFECTS.
+def _build_action_transitions(base: np.ndarray, n_actions: int) -> np.ndarray:
+    transitions = []
+    for a_idx in range(n_actions):
+        p = base.copy().astype(float)
+        action_name = ACTIONS[a_idx]
+        effects = ACTION_EFFECTS.get(action_name, {})
+        for (i, j), mult in effects.items():
+            p[i, j] *= mult
+        # Re-normalize each row after applying action effects.
+        row_sum = p.sum(axis=1, keepdims=True)
+        row_sum[row_sum == 0] = 1.0
+        p = p / row_sum
+        transitions.append(p)
+    return np.stack(transitions, axis=0)
+
+#cette fonction génère une matrice de récompenses pour chaque action et état, en attribuant des récompenses négatives plus sévères pour les états plus graves et les actions plus coûteuses.
+def _build_rewards(n_actions: int, n_states: int) -> np.ndarray:
+    rewards = np.zeros((n_actions, n_states), dtype=float)
+    for a in range(n_actions):
+        for s in range(n_states):
+            if s == n_states - 1:
+                rewards[a, s] = -15.0 - 0.2 * a
+            elif s == n_states - 2:
+                rewards[a, s] = -3.0 - 0.1 * a
+            else:
+                rewards[a, s] = 1.0 - 0.1 * a
+    return rewards
+
+
+def run_all(cfg: ProjectConfig) -> dict:
+    out = {}
+
+    df_dt = generate_dtmc_trace(cfg)
+    df_ct = generate_ctmc_trace(cfg)
+    out["dt_trace"] = df_dt
+    out["ct_trace"] = df_ct
+
+    transient = [0, 1, 2, 3]
+    mttf_steps = expected_steps_to_absorption(BASE_TRANSITION, transient)
+    out["dt_mttf_steps_from_states"] = mttf_steps
+
+    pi0 = np.array([1.0, 0.0, 0.0, 0.0, 0.0])
+    a = build_generator(BASE_GENERATOR)
+    time_grid = np.linspace(0.0, cfg.ctmc_horizon_hours, 200)
+    pi_t = trajectory(pi0, a, time_grid)
+    out["ct_time_grid"] = time_grid
+    out["ct_probabilities"] = pi_t
+
+    observations = df_dt[["temperature", "ecc_count", "xid_code", "utilization", "power_usage", "retired_pages"]].to_dict(
+        orient="records"
+    )
+    path = viterbi(observations, BASE_TRANSITION, pi0)
+    post = forward_filter(observations, BASE_TRANSITION, pi0)
+    out["hmm_path"] = path
+    out["hmm_post"] = post
+
+    if not df_ct.empty:
+        ct_obs = df_ct[["temperature", "ecc_count", "xid_code", "utilization", "power_usage", "retired_pages"]].to_dict(
+            orient="records"
+        )
+        ct_times = df_ct["time_hours"].tolist()
+        out["ct_hmm_post"] = ct_hmm_filter(ct_obs, ct_times, a, pi0)
+    else:
+        out["ct_hmm_post"] = np.empty((0, len(STATES)))
+
+    n_actions = len(ACTIONS)
+    n_states = len(STATES)
+    transitions = _build_action_transitions(BASE_TRANSITION, n_actions)
+    rewards = _build_rewards(n_actions, n_states)
+    out["mdp_transitions"] = transitions
+    out["mdp_rewards"] = rewards
+
+    v_star, pi_star = value_iteration(transitions, rewards, gamma=cfg.gamma)
+    # The terminal FailedPermanent state is operationally mapped to isolate_maintain.
+    # The argmax action in terminal states is mathematically arbitrary because episodes stop there.
+    pi_star = np.asarray(pi_star, dtype=int)
+    pi_star[n_states - 1] = ACTIONS.index("isolate_maintain")
+    out["mdp_v"] = v_star
+    out["mdp_policy"] = pi_star
+
+    env = RLEnv(transitions=transitions, rewards=rewards, terminal_state=n_states - 1, seed=cfg.seed)
+    q_q, ret_q = q_learning(env, episodes=cfg.rl_episodes, max_steps=cfg.rl_max_steps, gamma=cfg.gamma)
+    q_s, ret_s = sarsa(env, episodes=cfg.rl_episodes, max_steps=cfg.rl_max_steps, gamma=cfg.gamma)
+    q_r, rho, ret_r = r_learning(env, episodes=cfg.rl_episodes, max_steps=cfg.rl_max_steps)
+    v_td0 = td0_policy_evaluation(env, pi_star, episodes=cfg.td_eval_episodes, max_steps=cfg.rl_max_steps, gamma=cfg.gamma)
+    v_tdl = td_lambda_policy_evaluation(
+        env,
+        pi_star,
+        episodes=cfg.td_eval_episodes,
+        max_steps=cfg.rl_max_steps,
+        gamma=cfg.gamma,
+    )
+
+    out["q_learning_q"] = q_q
+    out["q_learning_returns"] = ret_q
+    out["sarsa_q"] = q_s
+    out["sarsa_returns"] = ret_s
+    out["r_learning_q"] = q_r
+    out["r_learning_rho"] = rho
+    out["r_learning_returns"] = ret_r
+    out["td0_v"] = v_td0
+    out["tdlambda_v"] = v_tdl
+
+    return out
+
+
+def summarize(results: dict) -> pd.DataFrame:
+    df = pd.DataFrame(
+        {
+            "metric": [
+                "DTMC_MTTF_from_Healthy_steps",
+                "Mean_Q_learning_return",
+                "Mean_SARSA_return",
+                "Mean_R_learning_return",
+                "R_learning_rho",
+                "TD0_V_Healthy",
+                "TDlambda_V_Healthy",
+            ],
+            "value": [
+                float(results["dt_mttf_steps_from_states"][0]),
+                float(np.mean(results["q_learning_returns"])),
+                float(np.mean(results["sarsa_returns"])),
+                float(np.mean(results["r_learning_returns"])),
+                float(results["r_learning_rho"]),
+                float(results["td0_v"][0]),
+                float(results["tdlambda_v"][0]),
+            ],
+        }
+    )
+    return df

@@ -1,0 +1,6 @@
+,Healthy,Degraded,MaintenanceRequired,FailedRecoverable,FailedPermanent
+Healthy,0.9347826086956522,0.03260869565217391,0.03260869565217391,0.0,0.0
+Degraded,0.06666666666666667,0.8,0.13333333333333333,0.0,0.0
+MaintenanceRequired,0.25,0.0,0.5,0.16666666666666666,0.08333333333333333
+FailedRecoverable,0.5,0.0,0.5,0.0,0.0
+FailedPermanent,0.0,0.0,0.0,0.0,1.0

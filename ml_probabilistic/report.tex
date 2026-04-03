@@ -1,0 +1,621 @@
+\documentclass[12pt,a4paper]{article}
+
+% --- Paquets ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{automata, positioning, arrows}
+\usepackage{booktabs}
+\usepackage{titlesec}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage[section]{placeins}
+
+% --- Configuration ---
+\geometry{margin=2.5cm}
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=cyan}
+\titleformat{\section}{\large\bfseries}{\thesection}{1em}{}
+
+\begin{document}
+
+% --- Page de Garde ---
+\begin{titlepage}
+    \centering
+    % \large \textbf{UNIVERSITÉ DE [NOM DE TON ÉTABLISSEMENT]} \\
+    % \textbf{Département Intelligence Artificielle} \\
+    \vfill
+    % \Large \textbf{PROJET D'APPRENTISSAGE PROBABILISTE} \\
+    \rule{\linewidth}{0.5mm} \\[0.4cm]
+    \huge \textbf{Analyse Stochastique de la Disponibilité d'un Cluster GPU H100 pour l'Entraînement de LLM} \\
+    \rule{\linewidth}{0.5mm} \\[1.5cm]
+    % \large \textbf{Présenté par :} [Ton Nom] \\
+    % \textbf{Encadré par :} Pr. Abdellatif El Afia \\
+    \vfill
+    % \large Année Universitaire 2024 - 2025
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{Introduction et Contexte du Deep Research}
+L'entraînement des modèles de langage (LLM) comme \textit{Llama 3} (Meta) utilise des clusters de 16 384 GPU NVIDIA H100. Les données réelles (Meta, 2024) montrent que :
+\begin{itemize}
+    \item Une panne survient toutes les 3 heures à cette échelle.
+    \item 50\% des pannes sont dues au matériel (HBM3 memory, GPU).
+    \item Le taux de défaillance annuel (AFR) est d'environ 9\%.
+\end{itemize}
+Ce projet modélise ces comportements pour prédire le temps moyen avant absorption (panne critique) et la disponibilité à long terme.
+
+\section{Modélisation à Temps Discret (DTMC)}
+Nous définissons un pas de temps $\Delta t = 24h$.
+\subsection{Définition de l'Espace des États $S$}
+\begin{enumerate}
+    \item \textbf{État 1 (Optimal) :} Fonctionnement à 100\%.
+    \item \textbf{État 2 (Dégradation Thermique) :} Surchauffe, performance à 70\%.
+    \item \textbf{État 3 (Instabilité logicielle) :} Erreurs ECC bursty. Nécessite un reboot.
+    \item \textbf{État 4 (Panne Matérielle) :} État Absorbant (Mort matérielle).
+    \item \textbf{État 5 (Maintenance) :} Réparation/Nettoyage planifié.
+\end{enumerate}
+
+\subsection{Matrice de Transition $\mathbb{P}$}
+Voici la matrice incluant les probabilités de rester dans le même état (self-loops) :
+\[
+\mathbb{P} = \begin{pmatrix}
+0.90 & 0.06 & 0.02 & 0.01 & 0.01 \\
+0.15 & 0.70 & 0.10 & 0.05 & 0.00 \\
+0.40 & 0.00 & 0.40 & 0.15 & 0.05 \\
+0.00 & 0.00 & 0.00 & 1.00 & 0.00 \\
+0.98 & 0.00 & 0.00 & 0.00 & 0.02 
+\end{pmatrix}
+\]
+
+\subsection{Distribution stationnaire DTMC (cha\^ine r\'eparable)}
+La matrice ci-dessus est absorbante (\'etat 4), donc la loi limite est triviale sans maintenance corrective.
+Pour l'analyse stationnaire op\'erationnelle, on utilise une version r\'eparable avec transition forc\'ee
+$4 \to 5$ en un pas:
+\[
+\mathbb{P}_{\mathrm{rep}} = \begin{pmatrix}
+0.90 & 0.06 & 0.02 & 0.01 & 0.01 \\
+0.15 & 0.70 & 0.10 & 0.05 & 0.00 \\
+0.40 & 0.00 & 0.40 & 0.15 & 0.05 \\
+0.00 & 0.00 & 0.00 & 0.00 & 1.00 \\
+0.98 & 0.00 & 0.00 & 0.00 & 0.02
+\end{pmatrix}
+\]
+Le vecteur stationnaire est la solution de
+\[
+\pi^{(d)} \mathbb{P}_{\mathrm{rep}} = \pi^{(d)}, \quad \sum_{i=1}^{5} \pi^{(d)}_i = 1.
+\]
+Num\'eriquement:
+\[
+\pi^{(d)} \approx (0.7458,\,0.1492,\,0.0497,\,0.0224,\,0.0330).
+\]
+L'uptime stationnaire discret est donc
+$\pi^{(d)}_1 + \pi^{(d)}_2 \approx 0.895$.
+
+\subsection{Graphe Représentatif}
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[->, >=stealth', shorten >=1pt, auto, node distance=3.5cm, semithick]
+        \node[state] (S1) {1};
+        \node[state] (S2) [right of=S1] {2};
+        \node[state] (S3) [below of=S2] {3};
+        \node[state, fill=red!15] (S4) [below of=S1] {4};
+        \node[state] (S5) [left of=S1] {5};
+
+        \path (S1) edge [loop above] node {0.90} (S1)
+              (S1) edge [bend left] node {0.06} (S2)
+              (S1) edge node {0.01} (S4)
+              (S2) edge [loop right] node {0.70} (S2)
+              (S2) edge [bend left] node {0.15} (S1)
+              (S2) edge node {0.10} (S3)
+              (S3) edge [loop right] node {0.40} (S3)
+              (S3) edge node {0.15} (S4)
+              (S4) edge [loop below] node {1.0} (S4)
+              (S5) edge [loop left] node {0.02} (S5)
+              (S5) edge node {0.98} (S1);
+    \end{tikzpicture}
+\end{figure}
+
+\section{Analyse de l'Absorption (Application Fondamentale)}
+\subsection{Calcul de la Matrice Fondamentale $N$}
+Nous isolons la sous-matrice $Q$ des états transitoires $\{1, 2, 3, 5\}$ :
+\[ Q = \begin{pmatrix} 0.90 & 0.06 & 0.02 & 0.01 \\ 0.15 & 0.70 & 0.10 & 0.00 \\ 0.40 & 0.00 & 0.40 & 0.05 \\ 0.98 & 0.00 & 0.00 & 0.02 \end{pmatrix} \]
+La matrice fondamentale est $N = (I - Q)^{-1}$. Elle représente le nombre moyen de jours passés dans chaque état avant la panne matérielle (absorption par l'état 4).
+\textbf{Calcul :} L'espérance du temps avant absorption partant de l'état 1 est $E_1 = \sum_{j} n_{1j}$. Dans notre modèle, cela correspond au \textit{Mean Time To Failure} (MTTF).
+Numériquement:
+\[
+N \approx
+\begin{pmatrix}
+33.3333 & 6.6667 & 2.2222 & 0.4535 \\
+25.0000 & 8.3333 & 2.2222 & 0.3685 \\
+25.0000 & 5.0000 & 3.3333 & 0.4252 \\
+33.3333 & 6.6667 & 2.2222 & 1.4739
+\end{pmatrix}
+\]
+et
+\[
+E = N\mathbf{1} \approx (42.6757,\,35.9240,\,33.7585,\,43.6961),
+\quad E_1 \approx 42.68\ \text{pas}.
+\]
+Avec $\Delta t=24\,h$, cela donne environ $42.68$ jours avant absorption en partant de l'\'etat optimal.
+
+\paragraph{Note de coh\'erence avec les r\'esultats exp\'erimentaux.}
+Le tableau du chapitre exp\'erimental ($78.93$ pas) provient du mod\`ele unifi\'e ex\'ecutable,
+o\`u l'\'etat \textit{FailedRecoverable} est transitoire et \textit{FailedPermanent} est absorbant.
+Dans cette variante, le m\^eme calcul $N=(I-Q)^{-1}$ donne
+$E_1 \approx 78.93$ pas. Les deux valeurs sont donc coh\'erentes, mais pour deux
+matrices DTMC diff\'erentes (mod\`ele p\'edagogique vs mod\`ele unifi\'e de simulation).
+
+\section{Modélisation à Temps Continu (CTMC)}
+Le système est plus précis en continu car les pannes surviennent à tout moment $t$.
+\subsection{Matrice Génératrice $\mathbb{A}$}
+Pour la mod\'elisation continue, nous retenons une matrice g\'en\'eratrice coh\'erente avec les transitions discr\`etes, en r\'einterpr\'etant les probabilit\'es de changement comme des intensit\'es de passage sur l'unit\'e de temps retenue. La matrice $\mathbb{A}$ v\'erifie $\sum_{j} a_{ij} = 0$ :
+\[ \mathbb{A} = \begin{pmatrix} 
+-0.10 & 0.06 & 0.02 & 0.01 & 0.01 \\
+0.15 & -0.30 & 0.10 & 0.05 & 0.00 \\
+0.40 & 0.00 & -0.60 & 0.15 & 0.05 \\
+0 & 0 & 0 & 0 & 0 \\
+0.98 & 0 & 0 & 0 & -0.98
+\end{pmatrix} \]
+\subsection{Équations de Chapman-Kolmogorov}
+Pour prédire l'état futur : $P(t) = e^{\mathbb{A}t}$. Cela permet de calculer la probabilité que le GPU soit opérationnel après 1000 heures de calcul intensif.
+
+\subsection{Distribution stationnaire CTMC (cha\^ine r\'eparable)}
+Pour la version continue r\'eparable, on introduit un taux de r\'eparation $\mu_{45}=0.40$ (transition $4\to5$):
+\[
+\mathbb{A}_{\mathrm{rep}} = \begin{pmatrix}
+-0.10 & 0.06 & 0.02 & 0.01 & 0.01 \\
+0.15 & -0.30 & 0.10 & 0.05 & 0.00 \\
+0.40 & 0.00 & -0.60 & 0.15 & 0.05 \\
+0.00 & 0.00 & 0.00 & -0.40 & 0.40 \\
+0.98 & 0.00 & 0.00 & 0.00 & -0.98
+\end{pmatrix}
+\]
+La distribution stationnaire continue est obtenue par
+\[
+\pi^{(c)} \mathbb{A}_{\mathrm{rep}} = 0, \quad \sum_{i=1}^{5} \pi^{(c)}_i = 1.
+\]
+Num\'eriquement:
+\[
+\pi^{(c)} \approx (0.7216,\,0.1443,\,0.0481,\,0.0541,\,0.0319).
+\]
+L'uptime stationnaire continu vaut
+$\pi^{(c)}_1 + \pi^{(c)}_2 \approx 0.866$.
+
+\section{Ergodicité et Régime Stationnaire}
+Pour maintenir le cluster, nous forçons la transition $4 \to 5$ (Réparation). La chaîne devient irréductible et apériodique. Nous calculons le vecteur stationnaire $\pi^*$ par :
+\[ \pi^* \mathbb{P} = \pi^* \quad \text{et} \quad \sum \pi_i^* = 1 \]
+$\pi_1^*$ représente la disponibilité ("Uptime") du système à long terme.
+Dans ce projet, les valeurs obtenues sont coh\'erentes entre DTMC et CTMC r\'eparables,
+avec un uptime stationnaire entre $86\%$ et $90\%$ selon l'\'echelle de temps.
+
+% --- Extensions du projet unifié (intégrées inline) ---
+
+\section{Mod\`ele de Markov Cach\'e (HMM) pour la Sant\'e Latente GPU}
+
+\subsection{Probl\`eme d'observation partielle}
+Dans le cas d'un cluster H100, l'\'etat r\'eel de sant\'e mat\'erielle n'est pas directement observable.
+On introduit donc une variable cach\'ee $S_t \in \{H,D,M,R,P\}$ avec:
+\begin{itemize}
+    \item $H$: Healthy,
+    \item $D$: Degraded,
+    \item $M$: MaintenanceRequired,
+    \item $R$: FailedRecoverable,
+    \item $P$: FailedPermanent.
+\end{itemize}
+
+Les observations sont not\'ees $O_t$.
+Deux cas sont trait\'es dans ce projet:
+\begin{itemize}
+    \item \textbf{Cas scalaire}: une seule variable (ex. ECC count),
+    \item \textbf{Cas vectoriel}: $O_t = (T_t, ECC_t, XID_t, U_t, PWR_t, RP_t)$.
+\end{itemize}
+
+\subsection{HMM discret (DT-HMM)}
+Le mod\`ele discret est d\'efini par:
+\begin{itemize}
+    \item une matrice de transition cach\'ee $\mathbf{A}=[a_{ij}]$,
+    \item une loi d'\'emission $b_j(o_t)=P(O_t=o_t\mid S_t=j)$,
+    \item une distribution initiale $\pi$.
+\end{itemize}
+
+L'algorithme Forward suit la r\'ecurrence:
+\[
+\alpha_t(j)=\left(\sum_i \alpha_{t-1}(i)a_{ij}\right)b_j(o_t)
+\]
+et la probabilit\'e a posteriori est obtenue apr\`es normalisation:
+\[
+P(S_t=j\mid O_{1:t}) = \frac{\alpha_t(j)}{\sum_k \alpha_t(k)}.
+\]
+
+Le d\'ecodage Viterbi maximise la trajectoire cach\'ee:
+\[
+\hat{s}_{1:T}=\arg\max_{s_{1:T}} P(s_{1:T},o_{1:T}).
+\]
+
+\subsection{HMM en temps continu (CT-HMM)}
+En temps continu, la dynamique cach\'ee est gouvern\'ee par le g\'en\'erateur $\mathbf{Q}$ (repris de la section CTMC):
+\[
+P(\Delta t)=\exp(\mathbf{Q}\Delta t).
+\]
+Pour des observations irr\'eguli\`eres aux instants $t_k$, l'\'etape de pr\'ediction entre $t_{k-1}$ et $t_k$ utilise $P(t_k-t_{k-1})$, puis une correction bay\'esienne par la vraisemblance d'\'emission.
+
+\subsection{Hypoth\`eses d'\'emission retenues}
+Pour rester coh\'erent avec les observables DCGM/XID de la litt\'erature:
+\begin{itemize}
+    \item Temp\'erature, puissance, utilisation: gaussiennes conditionnelles par \`etat,
+    \item ECC count, retired pages: Poisson conditionnelle,
+    \item XID code: cat\'egorielle.
+\end{itemize}
+
+Cette combinaison permet d'int\'egrer simultan\'ement des variables continues et discr\`etes.
+
+\subsection{R\'esultats HMM}
+La Figure~\ref{fig:hmm_forward} montre l'\'evolution des post\'erieurs Forward.
+On observe des basculements nets lors des s\'equences de d\'egradation et des plateaux lorsque le syst\`eme se stabilise.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{results/mandatory_plots/hmm_forward_posterior.png}
+    \caption{Posterieurs Forward pour les 120 premiers pas (cas vectoriel).}
+    \label{fig:hmm_forward}
+\end{figure}
+
+La comparaison des \`etats cach\'es simul\'es et de la s\'equence d\'ecod\'ee par Viterbi
+est conserv\'ee sous forme tabulaire dans \texttt{results/files/hmm\_true\_vs\_viterbi.csv},
+ce qui rend le chapitre robuste aux variations de structure des dossiers de figures.
+
+\paragraph{Lecture scalaire vs vectorielle.}
+Le cas scalaire est utile pour l'intuition et l'explication orale.
+Le cas vectoriel est plus discriminant car il combine sympt\^omes thermiques, m\'emoire ECC et exceptions XID.
+
+\section{Contr\^ole D\'ecisionnel: MDP et Apprentissage par Renforcement}
+
+\subsection{Formulation MDP du probl\`eme GPU}
+Le contr\^ole est formul\'e comme un MDP $\langle S,A,P,R,\gamma \rangle$ avec:
+\begin{itemize}
+    \item $S=\{H,D,M,R,P\}$,
+    \item $A=\{$keep\_running, power\_cap, checkpoint, reboot, isolate\_maintain$\}$,
+    \item $P(s'\mid s,a)$: transitions d\'ependantes de l'action,
+    \item $R(s,a)$: compromis performance/risque/co\^ut,
+    \item $\gamma \in (0,1)$: facteur d'actualisation.
+\end{itemize}
+
+La r\'ecompense instantan\'ee suit l'id\'ee:
+\[
+r_t = w_u\,\text{uptime}_t - w_f\,\mathbf{1}(s_t=P) - w_r\,\mathbf{1}(s_t=R) - w_a\,\text{cost}(a_t).
+\]
+
+\subsection{Solution MDP par value iteration}
+La valeur optimale satisfait:
+\[
+V^*(s)=\max_a\left[R(s,a)+\gamma\sum_{s'}P(s'\mid s,a)V^*(s')\right].
+\]
+La Figure~\ref{fig:mdp_policy} montre la politique optimale obtenue sur l'espace d'\'etats discretis\'e.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.62\textwidth]{results/mandatory_plots/mdp_policy_matrix.png}
+    \caption{Action optimale MDP par \`etat latent.}
+    \label{fig:mdp_policy}
+\end{figure}
+
+Lecture op\'erationnelle de la politique:
+Healthy $\to$ keep\_running,
+Degraded $\to$ power\_cap,
+MaintenanceRequired $\to$ isolate\_maintain,
+FailedRecoverable $\to$ reboot,
+FailedPermanent $\to$ isolate\_maintain.
+Le dernier choix est impos\'e par la logique m\'etier (isolement/remplacement),
+car l'\'etat permanent est terminal et l'argmax brut y est sinon peu interpr\'etable.
+
+\subsection{Algorithmes RL utilis\'es}
+\paragraph{Q-learning (off-policy).}
+\[
+Q(s,a)\leftarrow Q(s,a)+\alpha\left[r+\gamma\max_{a'}Q(s',a')-Q(s,a)\right].
+\]
+
+\paragraph{SARSA (on-policy).}
+\[
+Q(s,a)\leftarrow Q(s,a)+\alpha\left[r+\gamma Q(s',a')-Q(s,a)\right].
+\]
+
+\paragraph{TD(0).}
+\[
+V(s)\leftarrow V(s)+\alpha\left[r+\gamma V(s')-V(s)\right].
+\]
+
+\paragraph{TD($\lambda$).}
+On utilise des traces d'\'eligibilit\'e pour diffuser le cr\'edit temporel sur les \`etats r\'ecents.
+
+\paragraph{Extension R-learning (optionnelle).}
+Le crit\`ere moyen est estim\'e par $\rho$:
+\[
+Q(s,a)\leftarrow Q(s,a)+\alpha\left[r-\rho+\max_{a'}Q(s',a')-Q(s,a)\right].
+\]
+Cette extension est pertinente pour les syst\`emes d'exploitation continue.
+
+\subsection{R\'esultats RL simul\'es}
+Sur 30 ex\'ecutions (seeds diff\'erents), on obtient en moyenne:
+\begin{itemize}
+    \item $\overline{R}_{Q\text{-learning}} = 56.14$,
+    \item $\overline{R}_{SARSA} = 56.69$,
+    \item $\overline{R}_{R\text{-learning}} = 0.677$ (\'echelle moyenne par transition),
+    \item $V_{TD(0)}(H)=12.95$,
+    \item $V_{TD(\lambda)}(H)=11.73$.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{results/mandatory_plots/rl_convergence.png}
+    \caption{Convergence \`a l'\'echelle d'une ex\'ecution de r\'ef\'erence.}
+    \label{fig:rl_reference}
+\end{figure}
+
+La comparaison multi-ex\'ecutions est disponible dans
+\texttt{results/summary\_multi\_run.csv} (vue agr\'eg\'ee) et
+\texttt{results/files/rl\_returns\_reference.csv} (trace d\'etaill\'ee de r\'ef\'erence).
+
+\section{POMDP et Extension Non-Markovienne}
+
+\subsection{Pourquoi un POMDP?}
+Le MDP suppose un \`etat connu, ce qui est trop fort pour des GPU r\'eels.
+En pratique, on observe des signaux bruit\'es (ECC, XID, temp\'erature) et l'on d\'ecide sous incertitude.
+Le cadre naturel est donc le POMDP avec croyance:
+\[
+b_t(s)=P(S_t=s\mid O_{1:t},A_{1:t-1}).
+\]
+
+\subsection{Mise \`a jour de croyance}
+Pour une action $a_t$ et une observation $o_{t+1}$:
+\[
+b_{t+1}(s')=\eta\,O(o_{t+1}\mid s',a_t)\sum_s T(s'\mid s,a_t)b_t(s),
+\]
+avec $\eta$ constante de normalisation.
+
+La d\'ecision est ensuite prise sur l'espace des croyances:
+\[
+V^*(b)=\max_a\left[R(b,a)+\gamma\sum_o P(o\mid b,a)V^*(\tau(b,a,o))\right].
+\]
+
+\subsection{Extension non-Markovienne partiellement observable}
+Le Markov classique n'int\`egre pas explicitement l'usure cumul\'ee.
+On ajoute une m\'emoire op\'erationnelle:
+\[
+z_t=(\tau_t, c_t)
+\]
+o\`u $\tau_t$ est l'\^age depuis la derni\`ere maintenance et $c_t$ un cumul glissant d'erreurs ECC.
+
+Le syst\`eme augment\'e devient:
+\[
+\tilde{S}_t=(S_t,z_t), \qquad b_t(\tilde{s})=P(\tilde{S}_t=\tilde{s}\mid O_{1:t},A_{1:t-1}).
+\]
+
+Cette formulation capture des effets d'hyst\'er\`ese (m\^eme observation instantan\'ee mais risque diff\'erent selon l'historique).
+
+\subsection{Analyse des r\'esultats POMDP / non-Markov}
+La Figure~\ref{fig:belief_entropy} montre l'entropie de croyance au cours du temps.
+Les pics correspondent aux zones d'ambigu\"it\'e entre \`etats d\'egrad\'es et \`etats r\'ecup\'erables.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{results/sections/pomdp/pomdp_belief_entropy.png}
+    \caption{Entropie de croyance dans le contr\^ole partiellement observable.}
+    \label{fig:belief_entropy}
+\end{figure}
+
+La Figure~\ref{fig:non_markov_multiplier} montre le multiplicateur de risque li\'e \`a la m\'emoire non-Markovienne.
+Lorsque les ECC s'accumulent sans maintenance, le risque augmente de fa\c{c}on syst\'ematique.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{results/mandatory_plots/non_markov_risk_multiplier.png}
+    \caption{Multiplicateur de risque non-Markovien (\^age + cumul ECC).}
+    \label{fig:non_markov_multiplier}
+\end{figure}
+
+\paragraph{Int\'er\^et op\'erationnel.}
+Le POMDP am\'eliore la robustesse des d\'ecisions sous bruit.
+L'extension non-Markovienne \`a m\'emoire rend la politique plus conservatrice lorsque l'historique indique une usure avanc\'ee.
+
+\section{Protocole Exp\'erimental et R\'esultats}
+
+\subsection{Donn\'ees simul\'ees calibr\'ees}
+Le protocole g\'en\`ere des trajectoires calibr\'ees \`a partir des ordres de grandeur du dossier de fiabilit\'e:
+\begin{itemize}
+    \item 30 ex\'ecutions ind\'ependantes,
+    \item horizon discret variable (environ 180 \`a 420 pas),
+    \item horizon continu variable (environ 72h \`a 240h),
+    \item m\^eme espace d'\'etats cach\'es pour DTMC/CTMC/HMM/MDP/RL/POMDP.
+\end{itemize}
+
+Les fichiers sont export\'es dans:
+\begin{itemize}
+    \item \texttt{data/simulated\_raw/} (traces brutes DT et CT),
+    \item \texttt{data/simulated\_processed/} (agr\'egats et diagnostics),
+    \item \texttt{results/mandatory\_plots/} (figures principales),
+    \item \texttt{results/sections/} (figures export\'ees par section),
+    \item \texttt{results/files/} (tables CSV de preuve: politiques, valeurs, post\'erieurs).
+\end{itemize}
+
+Le mode \textit{quick} est volontairement l\'eger pour validation rapide.
+Pour un passage soutenance plus exigeant, le projet expose des param\`etres
+de charge (horizon, \texttt{rl\_episodes}, \texttt{rl\_max\_steps}) afin d'augmenter le temps d'ex\'ecution.
+
+\subsection{Cas scalaire vs vecteur al\'eatoire}
+\paragraph{Cas scalaire.}
+On utilise une observation unique (ex. ECC count) pour l'inf\'erence.
+Ce cas est plus simple \`a expliquer mais moins discriminant lorsque plusieurs \`etats ont des signatures proches.
+
+\paragraph{Cas vectoriel.}
+On utilise le vecteur complet:
+\[
+O_t=(T_t,ECC_t,XID_t,U_t,PWR_t,RP_t).
+\]
+Le vecteur offre une meilleure s\'eparation des \`etats cach\'es et une d\'ecision plus stable en POMDP.
+
+\subsection{M\'etriques retenues}
+\begin{itemize}
+    \item Fiabilit\'e: MTTF (pas), probabilit\'e de survie CTMC,
+    \item Inf\'erence: qualit\'e visuelle Forward/Viterbi,
+    \item Contr\^ole: retour moyen Q-learning, SARSA, R-learning,
+    \item Evaluation de politique: $V_{TD(0)}(H)$ et $V_{TD(\lambda)}(H)$,
+    \item Sensibilit\'e: score de politique et uptime attendu selon $(\gamma, \text{failure\_scale})$.
+\end{itemize}
+
+\subsection{R\'esultats quantitatifs principaux}
+Sur 30 ex\'ecutions simul\'ees, les moyennes observ\'ees sont:
+\begin{center}
+\begin{tabular}{l c}
+\toprule
+M\'etrique & Valeur moyenne \\
+\midrule
+MTTF DTMC (mod\`ele unifi\'e) depuis Healthy & 78.93 pas \\
+Retour moyen Q-learning & 56.14 \\
+Retour moyen SARSA & 56.69 \\
+Retour moyen R-learning & 0.677 \\
+$V_{TD(0)}(H)$ & 12.95 \\
+$V_{TD(\lambda)}(H)$ & 11.73 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Remarque: la section th\'eorique d'absorption du rapport (matrice p\'edagogique avec \`etat 4 absorbant)
+donne $E_1 \approx 42.68$ pas. La valeur $78.93$ ci-dessus correspond au mod\`ele unifi\'e
+utilis\'e dans le code exp\'erimental, o\`u \textit{FailedRecoverable} est transitoire et
+\textit{FailedPermanent} est absorbant.
+
+\subsection{Figures de validation}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{results/mandatory_plots/dtmc_transition_heatmap.png}
+    \caption{Matrice de transition empirique estim\'ee sur une ex\'ecution de r\'ef\'erence.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{results/mandatory_plots/ct_reliability.png}
+    \caption{Probabilit\'e de survie CTMC en fonction du temps continu.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{results/mandatory_plots/hmm_forward_posterior.png}
+    \caption{Post\'erieur Forward du HMM (cas vectoriel).}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{results/mandatory_plots/mdp_policy_matrix.png}
+    \caption{Politique optimale MDP (matrice \`a une action dominante par \`etat).}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.78\textwidth]{results/mandatory_plots/sensitivity_heatmap.png}
+    \caption{Analyse de sensibilit\'e du score de politique selon $(\gamma, \text{failure\_scale})$.}
+\end{figure}
+
+\subsection{Discussion critique}
+\begin{itemize}
+    \item Le mod\`ele unifi\'e est coh\'erent: m\^eme syst\`eme sous-jacent pour fiabilit\'e, inf\'erence et contr\^ole.
+    \item Le vecteur d'observables est pr\'ef\'erable au scalaire pour les transitions ambigu\"es.
+    \item Les politiques RL convergent, mais les performances restent sensibles aux pond\'erations de co\^ut.
+    \item Le cadre reste une approximation: la validit\'e externe d\'epend d'une calibration future sur t\'el\'em\'etrie r\'eelle.
+\end{itemize}
+
+\section{Conclusion G\'en\'erale et Perspectives}
+
+Ce projet propose un cadre unifi\'e pour la fiabilit\'e et le contr\^ole d'un cluster NVIDIA H100 d\'edi\'e \`a l'entra\^inement LLM.
+La coh\'erence est assur\'ee par un m\^eme espace d'\'etats cach\'es utilis\'e dans:
+\begin{itemize}
+    \item DTMC et CTMC (dynamique de fiabilit\'e),
+    \item HMM discret et continu (inf\'erence de sant\'e latente),
+    \item MDP et RL (d\'ecision et optimisation),
+    \item POMDP et extension non-Markovienne (incertitude + m\'emoire d'usure).
+\end{itemize}
+
+\subsection{R\'esultats essentiels}
+\begin{itemize}
+    \item Le MTTF discret est stable sur les campagnes simul\'ees (environ 78.93 pas).
+    \item Les mod\`eles HMM restituent correctement les basculements d'\'etats cach\'es.
+    \item Les politiques RL convergent et offrent un compromis op\'erationnel entre disponibilit\'e et co\^uts de maintenance.
+    \item Le POMDP est pertinent d\`es que l'\'etat mat\'eriel n'est pas directement observable.
+    \item L'extension non-Markovienne capte explicitement les effets cumulatifs (ECC + \^age), absents d'un mod\`ele Markov strict.
+\end{itemize}
+
+\subsection{Limites}
+\begin{itemize}
+    \item Les donn\'ees restent simul\'ees, m\^eme si calibr\'ees sur des ordres de grandeur publi\'es.
+    \item Le cadre RL est tabulaire, donc limit\'e en forte dimension.
+    \item Les param\`etres de co\^ut/r\'ecompense influencent les politiques finales.
+\end{itemize}
+
+\subsection{Perspectives de continuit\'e}
+\begin{itemize}
+    \item Calibration sur t\'el\'em\'etrie r\'eelle (DCGM + logs XID) et mise \`a jour bay\'esienne des transitions.
+    \item Extension multi-noeuds explicite avec corr\'elations inter-racks.
+    \item Passage \`a des m\'ethodes profondes (Deep POMDP/DRQN) pour les observations riches.
+\end{itemize}
+
+En synth\`ese, l'approche est \`a la fois acad\'emiquement rigoureuse, impl\'ementable en Python, et d\'efendable en soutenance courte car chaque bloc th\'eorique est reli\'e \`a des sorties exp\'erimentales concr\`etes.
+
+\FloatBarrier
+\clearpage
+
+\section{Références}
+\begin{enumerate}
+    \item Meta AI. (2024). Training Llama 3: Reliability at scale.
+    \item Das et al. (2025). Characterizing GPU Resilience. arXiv:2503.11901.
+    \item El Afia, A. Apprentissage Probabiliste - Supports de cours.
+    \item Meta reports that half of the failures during Llama 3 training. moomoo Community. Consulté le 2 avril 2026. \url{https://www.moomoo.com/community/feed/meta-reports-that-half-of-the-failures-during-llama-3-112873025896854}
+    \item Faulty Nvidia H100 GPUs and HBM3 memory caused half of failures during Llama 3 training. Tom's Hardware. Consulté le 2 avril 2026. \url{https://www.tomshardware.com/tech-industry/artificial-intelligence/faulty-nvidia-h100-gpus-and-hbm3-memory-caused-half-of-the-failures-during-llama-3-training-one-failure-every-three-hours-for-metas-16384-gpu-training-cluster}
+    \item MoFa: A Unified Performance Modeling Framework for LLM Pretraining. arXiv. Consulté le 2 avril 2026. \url{https://arxiv.org/html/2511.09837v2}
+    \item Revisiting Reliability in Large-Scale Machine Learning Research Clusters. arXiv. Consulté le 2 avril 2026. \url{https://arxiv.org/pdf/2410.21680}
+    \item Markov Decision Process (MDP) in Reinforcement Learning. GeeksforGeeks. Consulté le 2 avril 2026. \url{https://www.geeksforgeeks.org/machine-learning/what-is-markov-decision-process-mdp-and-its-relevance-to-reinforcement-learning/}
+    \item Temporal-Aware GPU Resource Allocation for Distributed LLM Inference via Reinforcement Learning. arXiv. Consulté le 2 avril 2026. \url{https://arxiv.org/pdf/2507.10259}
+    \item Hidden Markov Models and Their Application for Predicting Failure Events. PMC. Consulté le 2 avril 2026. \url{https://pmc.ncbi.nlm.nih.gov/articles/PMC7304047/}
+    \item Cross-Timeslot Optimization for Distributed GPU Inference Using Reinforcement Learning. Consulté le 2 avril 2026. \url{https://ics.uci.edu/~habibif/cross-timeslot.pdf}
+    \item GPU Reliability in AI Clusters: A Study of Failure Modes and Effects. Sarcouncil Journal of Engineering and Computer Sciences. Consulté le 2 avril 2026. \url{https://sarcouncil.com/download-article/SJECS-97-2025-298-306.pdf}
+    \item Fault-tolerant training: How we build reliable clusters for distributed AI workloads. Nebius. Consulté le 2 avril 2026. \url{https://nebius.com/blog/posts/how-we-build-reliable-clusters}
+    \item Llama 3.1 training fails once every three hours on average. EEWorld. Consulté le 2 avril 2026. \url{https://en.eeworld.com.cn/mp/QbitAI/a382499.jspx}
+    \item CoreWeave Training Benchmarks Whitepaper (August 2025). CoreWeave. Consulté le 2 avril 2026. \url{https://cdn.prod.website-files.com/62bc66d283fd9c34ffec780a/689fa33a0e99f19c11c8ecbe_CoreWeave%20Training%20Benchmarks%20Whitepaper%20August%202025.pdf}
+    \item Lazarus: Resilient and Elastic Training of Mixture-of-Experts Models. arXiv. Consulté le 2 avril 2026. \url{https://arxiv.org/html/2407.04656v2}
+    \item NVIDIA H100 Benchmarks for Large-Scale Training. CoreWeave. Consulté le 2 avril 2026. \url{https://www.coreweave.com/blog/nvidia-h100-gpu-benchmark-results-what-we-learned-from-large-scale-gpu-testing}
+    \item How to handle common Xid events. Byteplus. Consulté le 2 avril 2026. \url{https://docs.byteplus.com/en/docs/mlp/How_to_handle_common_Xid_events}
+    \item GPU Health. Modal Docs. Consulté le 2 avril 2026. \url{https://modal.com/docs/guide/gpu-health}
+    \item Performance Analysis for a Degrading System with Markov Model. ResearchGate. Consulté le 2 avril 2026. \url{https://www.researchgate.net/publication/363336255_Performance_analysis_for_a_degrading_system_with_Markov_model}
+    \item Fire-Flyer AI-HPC: A Cost-Effective Software-Hardware Co-Design for Deep Learning. arXiv. Consulté le 2 avril 2026. \url{https://arxiv.org/html/2408.14158v1}
+    \item A Dynamic Hidden Markov Model with Real-Time Updates for Multi-Risk Meteorological Forecasting in Offshore Wind Power. MDPI. Consulté le 2 avril 2026. \url{https://www.mdpi.com/2071-1050/17/8/3606}
+    \item Network motif detection using hidden markov models. PMC. Consulté le 2 avril 2026. \url{https://pmc.ncbi.nlm.nih.gov/articles/PMC12647810/}
+    \item Understanding Data Movement and Processing Platform at Netflix. MarkTechPost. Consulté le 2 avril 2026. \url{https://www.marktechpost.com/2022/09/02/understanding-data-movement-and-processing-platform-at-netflix/}
+    \item Markov Chain. Lark AI glossary. Consulté le 2 avril 2026. \url{https://www.larksuite.com/en_us/topics/ai-glossary/markov-chain}
+    \item Pre-trained Large Language Models Learn to Predict Hidden Markov Models In-context. OpenReview. Consulté le 2 avril 2026. \url{https://openreview.net/pdf/d9c6c3a5ef2b457a99d3851f69c626f9896663ed.pdf}
+    \item Understanding GPU errors on large-scale HPC systems and the implications for system design and operation. ResearchGate. Consulté le 2 avril 2026. \url{https://www.researchgate.net/publication/282377434_Understanding_GPU_errors_on_large-scale_HPC_systems_and_the_implications_for_system_design_and_operation}
+    \item Efficient Probabilistic Model Checking on General Purpose Graphics Processors. SPIN workshop. Consulté le 2 avril 2026. \url{https://spinroot.com/spin/symposia/ws09/Bosnacki.pdf}
+    \item SuperBench: Improving Cloud AI Infrastructure Reliability with Proactive Validation. USENIX ATC. Consulté le 2 avril 2026. \url{https://www.usenix.org/system/files/atc24-xiong.pdf}
+    \item A large-scale study of soft-errors on GPUs in the field. ResearchGate. Consulté le 2 avril 2026. \url{https://www.researchgate.net/publication/299641571_A_large-scale_study_of_soft-errors_on_GPUs_in_the_field}
+    \item BOA\_0622 resource. The Education University of Hong Kong. Consulté le 2 avril 2026. \url{https://www.eduhk.hk/eac-isba2024/BOA_0622.pdf}
+    \item NVIDIA DCGM. NVIDIA Developer. Consulté le 2 avril 2026. \url{https://developer.nvidia.com/dcgm}
+    \item GPU Cluster Monitoring: Real-Time Performance Analytics and Predictive Maintenance. Introl. Consulté le 2 avril 2026. \url{https://introl.com/blog/gpu-cluster-monitoring-real-time-analytics-predictive-maintenance}
+    \item Collect and view DCGM metrics. Google Kubernetes Engine (GKE). Consulté le 2 avril 2026. \url{https://docs.cloud.google.com/kubernetes-engine/docs/how-to/dcgm-metrics}
+    \item NVIDIA DCGM Monitoring: Setup, Metrics \& Alerts. MetricFire. Consulté le 2 avril 2026. \url{https://www.metricfire.com/blog/why-gpu-monitoring-matters-tracking-utilization-power-and-errors-with-dcgm/}
+    \item DCGM Release Notes. NVIDIA Documentation. Consulté le 2 avril 2026. \url{https://docs.nvidia.com/datacenter/dcgm/latest/release-notes/changelog.html}
+    \item XID Errors. NVIDIA Documentation. Consulté le 2 avril 2026. \url{https://docs.nvidia.com/deploy/pdf/XID_Errors.pdf}
+    \item Working with Xid Errors. NVIDIA Documentation. Consulté le 2 avril 2026. \url{https://docs.nvidia.com/deploy/xid-errors/working-with-xid-errors.html}
+    \item Algorithmic Techniques for GPU Scheduling: A Comprehensive Survey. Preprints.org. Consulté le 2 avril 2026. \url{https://www.preprints.org/manuscript/202505.0152/download/final_file}
+    \item Deep Reinforcement Learning for Job Scheduling and Resource Management in Cloud Computing: An Algorithm-Level Review. arXiv. Consulté le 2 avril 2026. \url{https://arxiv.org/html/2501.01007v1}
+    \item Condition-Based Maintenance scheduling of an aircraft fleet under partial observability. AGIFORS. Consulté le 2 avril 2026. \url{https://www.agifors.org/resources/Documents/Anna%20Valicek%20Papers/2024/04-Iordanis%20Tseremoglou%20-%20Paper%20-%20Condition-Based%20Maintenance%20scheduling%20of%20an%20aircraft%20fleet.pdf}
+    \item Joint Optimization of Time-Aware Condition-Based Maintenance and Repair Resource Management for Gantry Crane Clusters. IEEE Xplore. Consulté le 2 avril 2026. \url{https://ieeexplore.ieee.org/iel8/6287639/10380310/10788675.pdf}
+    \item Apostolos Kokolis's research works. ResearchGate. Consulté le 2 avril 2026. \url{https://www.researchgate.net/scientific-contributions/Apostolos-Kokolis-2155332310}
+    \item Predicting GPU Failures With High Precision Under Deep Learning Workloads. Cheng Tan et al. Consulté le 2 avril 2026. \url{https://naizhengtan.github.io/doc/papers/liu23predicting.pdf}
+    \item Nvidia DCGM Exporter. Datadog Docs. Consulté le 2 avril 2026. \url{https://docs.datadoghq.com/integrations/dcgm/}
+\end{enumerate}
+
+\end{document}

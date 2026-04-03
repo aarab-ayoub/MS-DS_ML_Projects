@@ -12,3 +12,9 @@ Deeplearning_project/**/*.pth
 # OCR results (regenerated after training)
 Deeplearning_project/ocr-from-scratch/results/best_mps_model.pth
 
+IOT/mitbih/
+IOT/mitbih/.DS_Store
+IOT/zip/
+IOT/mit-bih-arrhythmia-database-1.0.0/
+IOT/ptb-xl/
+IOT/mitbih_database/

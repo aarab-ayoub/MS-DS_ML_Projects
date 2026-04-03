@@ -1,0 +1,6 @@
+state,action_idx,action_name
+Healthy,0,keep_running
+Degraded,1,power_cap
+MaintenanceRequired,4,isolate_maintain
+FailedRecoverable,3,reboot
+FailedPermanent,4,isolate_maintain

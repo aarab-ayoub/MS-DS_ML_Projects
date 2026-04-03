@@ -1,0 +1,4 @@
+event_idx,time_hours,holding_hours,state_idx,state,action_idx,action,next_state_idx,next_state,reward,temperature,ecc_count,xid_code,utilization,power_usage,retired_pages
+0,0.0,5.779960518913253,0,Healthy,0,keep_running,1,Degraded,1.2,63.63787648714803,0,0,91.41259315987352,631.880309499409,0
+1,5.779960518913253,1.5493182670560548,1,Degraded,0,keep_running,3,FailedRecoverable,-2.64,68.34083494362596,0,31,80.98447804941173,658.3119827854177,0
+2,7.329278785969308,2.04109265282439,3,FailedRecoverable,3,reboot,4,FailedPermanent,-14.940000000000001,64.04507865648867,7,79,27.919907736582914,327.6877584875487,0

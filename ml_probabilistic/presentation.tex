@@ -1,0 +1,259 @@
+\documentclass[aspectratio=169]{beamer}
+
+% --------- PACKAGES ---------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric}
+
+% --- THEME AND COLOR SCHEME ---
+\usetheme{Madrid}
+\usecolortheme{beaver}
+\definecolor{coverblue}{HTML}{004080}
+
+% --- BEAMER COLOR SETTINGS ---
+\setbeamercolor{palette primary}{bg=coverblue,fg=white}
+\setbeamercolor{palette secondary}{bg=coverblue,fg=white}
+\setbeamercolor{palette tertiary}{bg=coverblue,fg=white}
+\setbeamercolor{palette quaternary}{bg=coverblue,fg=white}
+\setbeamercolor{structure}{fg=coverblue}
+\setbeamercolor{title}{bg=coverblue,fg=white}
+\setbeamercolor{frametitle}{bg=coverblue,fg=white}
+\setbeamercolor{block title}{bg=coverblue,fg=white}
+
+% --- TITLE INFORMATION ---
+\title[Fiabilite Cluster H100]{Analyse Stochastique de la Fiabilite d'un Cluster NVIDIA H100}
+\author[Aarab Ayoub]{Aarab Ayoub \and Equipe Projet}
+\institute[UAE ENS Tetouan]{
+    ABDELMALEK ESSAADI UNIVERSITY \\
+    ENS Tetouan -- Master Data Science \\
+    \vspace{0.3cm}
+    \textbf{Encadrant:} Pr. Abdellatif El Afia
+}
+\date{Soutenance 2026}
+
+\begin{document}
+
+% =========================
+% SLIDE 1
+% =========================
+\begin{frame}{Slide 1 -- Titre et Contexte}
+    \titlepage
+    \vspace{-0.4cm}
+    \begin{block}{Contexte}
+        Nous avons etudie la fiabilite d'un cluster NVIDIA H100 pour l'entrainement de LLMs: a grande echelle,
+        les pannes deviennent frequentes, donc il faut modeliser, predire et piloter les defaillances.
+    \end{block}
+\end{frame}
+
+% =========================
+% SLIDE 2
+% =========================
+\begin{frame}{Slide 2 -- Probleme Reel et Motivation}
+\begin{columns}[T]
+\begin{column}{0.54\textwidth}
+\begin{itemize}
+    \item Degradation thermique
+    \item Erreurs ECC
+    \item Evenements XID
+    \item Reboot / maintenance / panne
+    \item Impact direct sur uptime et interruption d'entrainement
+\end{itemize}
+
+\vspace{0.2cm}
+Le cluster passe par des etats de sante \textit{latent}es, pas toujours observables directement.
+Les decisions de maintenance influencent fortement la disponibilite long terme.
+\end{column}
+\begin{column}{0.46\textwidth}
+\centering
+\begin{tikzpicture}[node distance=0.7cm, scale=0.78, transform shape]
+\tikzstyle{box} = [rectangle, rounded corners, draw=coverblue, very thick, align=center, minimum width=3.0cm, minimum height=0.7cm]
+\node[box] (a) {GPU Cluster};
+\node[box, below=of a] (b) {Telemetry / Logs};
+\node[box, below=of b] (c) {Latent Health State};
+\node[box, below=of c] (d) {Decision Policy};
+\node[box, below=of d] (e) {Uptime / Performance};
+\draw[-{Latex[length=2mm]}] (a) -- (b);
+\draw[-{Latex[length=2mm]}] (b) -- (c);
+\draw[-{Latex[length=2mm]}] (c) -- (d);
+\draw[-{Latex[length=2mm]}] (d) -- (e);
+\end{tikzpicture}
+\end{column}
+\end{columns}
+\end{frame}
+
+% =========================
+% SLIDE 3
+% =========================
+\begin{frame}{Slide 3 -- Formulation du Systeme}
+\begin{columns}[T]
+\begin{column}{0.5\textwidth}
+\begin{block}{Etats}
+Healthy, Degraded, MaintenanceRequired, FailedRecoverable, FailedPermanent
+\end{block}
+\begin{block}{Observations}
+temperature, ECC count, XID code, utilization
+\end{block}
+\end{column}
+\begin{column}{0.5\textwidth}
+\begin{block}{Actions}
+keep\_running, power\_cap, reboot, isolate\_maintain
+\end{block}
+\begin{block}{Reward}
+uptime positif, panne negative, cout modere pour reboot/maintenance
+\end{block}
+\end{column}
+\end{columns}
+
+\vspace{0.2cm}
+\textbf{Message cle:} meme cas d'etude pour tous les modeles; seul le point de vue change
+(dynamique, etat cache, controle, controle sous observabilite partielle).
+\end{frame}
+
+% =========================
+% SLIDE 4
+% =========================
+\begin{frame}{Slide 4 -- Dynamique Markovienne: DTMC + CTMC}
+\begin{columns}[T]
+\begin{column}{0.52\textwidth}
+\textbf{DTMC (discret)}
+\begin{itemize}
+    \item Evolution pas a pas
+    \item Matrice de transition $P$
+\end{itemize}
+
+\textbf{CTMC (continu)}
+\begin{itemize}
+    \item Evolution en temps reel
+    \item Matrice generatrice $A$
+\end{itemize}
+
+\vspace{0.2cm}
+\small
+On commence par une chaine discrete, puis on passe au continu pour mieux representer
+les durees de sejour et les taux de defaillance.
+\end{column}
+\begin{column}{0.48\textwidth}
+\begin{figure}
+\centering
+\includegraphics[width=\textwidth]{results/mandatory_plots/ct_reliability.png}
+\caption{Courbe de survie CTMC.}
+\end{figure}
+\end{column}
+\end{columns}
+\end{frame}
+
+% =========================
+% SLIDE 5
+% =========================
+\begin{frame}{Slide 5 -- HMM: Etat Cache et Observations}
+\begin{columns}[T]
+\begin{column}{0.54\textwidth}
+\begin{itemize}
+    \item L'etat reel du GPU n'est pas directement observable.
+    \item HMM: inference des etats latents a partir de la telemetrie.
+    \item \textbf{Forward}: probabilites a posteriori filtrees.
+    \item \textbf{Viterbi}: trajectoire latente la plus probable.
+    \item \textbf{Baum-Welch}: ajustement des parametres.
+\end{itemize}
+\end{column}
+\begin{column}{0.46\textwidth}
+\begin{figure}
+\centering
+\includegraphics[width=\textwidth]{results/mandatory_plots/hmm_forward_posterior.png}
+\caption{Posterieurs HMM (Forward).}
+\end{figure}
+\end{column}
+\end{columns}
+
+\small Quand une courbe est proche de 1, le modele est quasi certain de l'etat latent.
+\end{frame}
+
+% =========================
+% SLIDE 6
+% =========================
+\begin{frame}{Slide 6 -- MDP + Reinforcement Learning}
+\begin{columns}[T]
+\begin{column}{0.50\textwidth}
+\textbf{MDP (decision)}
+\begin{itemize}
+    \item state, action, transition, reward
+    \item politique optimale par value iteration
+\end{itemize}
+
+\textbf{RL (apprentissage)}
+\begin{itemize}
+    \item Q-learning, SARSA
+    \item apprendre la meilleure action par interaction
+\end{itemize}
+\end{column}
+\begin{column}{0.50\textwidth}
+\begin{figure}
+\centering
+\includegraphics[width=\textwidth]{results/mandatory_plots/mdp_policy_matrix.png}
+\caption{Politique optimale MDP.}
+\end{figure}
+\end{column}
+\end{columns}
+\end{frame}
+
+% =========================
+% SLIDE 7
+% =========================
+\begin{frame}{Slide 7 -- Extensions: POMDP + Non-Markovien}
+\begin{columns}[T]
+\begin{column}{0.5\textwidth}
+\textbf{POMDP}
+\begin{itemize}
+    \item Decision sous incertitude
+    \item Politique sur une croyance probabiliste des etats
+\end{itemize}
+\begin{figure}
+\centering
+\includegraphics[width=0.95\textwidth]{results/sections/pomdp/pomdp_belief_entropy.png}
+\caption{Entropie de croyance.}
+\end{figure}
+\end{column}
+\begin{column}{0.5\textwidth}
+\textbf{Extension non-markovienne}
+\begin{itemize}
+    \item Le risque depend aussi de l'historique
+    \item Cumul ECC + age depuis maintenance
+\end{itemize}
+\begin{figure}
+\centering
+\includegraphics[width=0.95\textwidth]{results/mandatory_plots/non_markov_risk_multiplier.png}
+\caption{Multiplicateur de risque memoire.}
+\end{figure}
+\end{column}
+\end{columns}
+\end{frame}
+
+% =========================
+% SLIDE 8
+% =========================
+\begin{frame}{Slide 8 -- Resultats et Conclusion}
+\begin{block}{Resultats}
+\begin{itemize}
+    \item Regime stationnaire: uptime long terme coherent entre DTMC et CTMC.
+    \item HMM: bonne identification des regimes latents.
+    \item MDP/RL: actions apprises coherentes avec la logique operationnelle.
+    \item Non-Markovien: effet net de l'historique d'usure.
+\end{itemize}
+\end{block}
+
+\begin{block}{Contributions}
+Cadre unifie, simulation coherente, et articulation entre modelisation, inference et controle.
+\end{block}
+
+\begin{alertblock}{Conclusion}
+L'apprentissage probabiliste est pertinent pour la fiabilite des clusters GPU H100.
+Prochaine etape: calibration sur telemetrie reelle et modeles plus profonds.
+\end{alertblock}
+\end{frame}
+
+\end{document}

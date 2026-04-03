@@ -1,0 +1,2 @@
+event_idx,time_hours,holding_hours,state_idx,state,action_idx,action,next_state_idx,next_state,reward,temperature,ecc_count,xid_code,utilization,power_usage,retired_pages
+0,0.0,2.1735557012634885,0,Healthy,0,keep_running,4,FailedPermanent,-14.64,60.48402930086381,0,0,83.69661355238895,595.541030563463,0
