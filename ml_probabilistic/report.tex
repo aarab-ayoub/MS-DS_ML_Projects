@@ -133,6 +133,39 @@ Les observations utilisées sont scalaire (cas simple) ou vectorielle:
 O_t=(T_t,\,ECC_t,\,XID_t,\,U_t,\,PWR_t,\,RP_t).
 \]
 
+\subsection{Cas scalaire, cas vectoriel et variables aléatoires}
+\textbf{Cas scalaire:} on suit une seule variable aléatoire, par exemple
+\[
+X_t=ECC_t, \qquad X_t\mid S_t=j \sim \mathrm{Poisson}(\lambda_j).
+\]
+
+\textbf{Cas vectoriel:} on suit un vecteur de variables aléatoires
+\[
+O_t=(T_t,\,ECC_t,\,XID_t,\,U_t,\,PWR_t,\,RP_t),
+\]
+et l'émission est modélisée par
+\[
+b_j(o_t)=p(T_t\mid j)\,p(ECC_t\mid j)\,p(XID_t\mid j)\,p(U_t\mid j)\,p(PWR_t\mid j)\,p(RP_t\mid j).
+\]
+Dans notre implémentation: gaussiennes pour $(T,U,PWR)$, Poisson pour $(ECC,RP)$,
+et catégorielle pour $XID$.
+
+\subsection{Matrice d'émission catégorielle (XID)}
+Pour la composante discrète $XID_t\in\{0,31,48,79\}$, la matrice d'émission utilisée est:
+\begin{center}
+\begin{tabular}{l c c c c}
+\toprule
+État latent & $P(XID=0)$ & $P(XID=31)$ & $P(XID=48)$ & $P(XID=79)$ \\
+\midrule
+Healthy & 0.97 & 0.02 & 0.01 & 0.00 \\
+Degraded & 0.80 & 0.12 & 0.07 & 0.01 \\
+MaintenanceRequired & 0.55 & 0.20 & 0.20 & 0.05 \\
+FailedRecoverable & 0.15 & 0.20 & 0.35 & 0.30 \\
+FailedPermanent & 0.05 & 0.10 & 0.25 & 0.60 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
 \paragraph{Ce que ce modèle fait dans notre projet (What this model does in our project).}
 Le HMM infère l'état latent de santé du GPU à partir de télémétrie bruitée.
 
@@ -298,6 +331,20 @@ $V_{TD(\lambda)}(Healthy)$ & 13.82 \\
 \end{tabular}
 \end{center}
 
+\subsection{Résultats complémentaires (sections détaillées)}
+Ces indicateurs sont calculés à partir des fichiers détaillés de section
+(\texttt{results/sections/hmm/*.csv}, \texttt{results/sections/mdp/*.csv}, \texttt{results/sections/rl/*.csv}):
+\begin{itemize}
+    \item Exactitude \texttt{true\_state} vs \texttt{viterbi\_state}: \(99.69\%\),
+    \item Confiance moyenne du posterior Forward (\(\max_j P(S_t=j\mid O_{1:t})\)): \(0.990\),
+    \item Entropie moyenne de croyance Forward: \(0.0285\),
+    \item Marge minimale de décision MDP (écart entre meilleure et 2e action en Q-table): \(0.119\),
+    \item Variabilité des retours RL (écart-type): Q-learning \(\sigma\approx 60.80\), SARSA \(\sigma\approx 68.28\).
+\end{itemize}
+
+\textbf{Lecture concrète:} le HMM est très cohérent avec l'état simulé, la politique MDP reste globalement bien séparée,
+et RL apprend une stratégie performante mais avec une variance notable entre épisodes.
+
 \section{Interpretation of Results}
 \paragraph{MDP policy table (decision meaning).}
 La table \texttt{mdp\_policy\_table.csv} se lit comme une règle de décision:
@@ -348,32 +395,6 @@ et les valeurs numériques reportées sont alignées avec \texttt{results/summar
     \item NVIDIA H100 Benchmarks for Large-Scale Training. CoreWeave. Consulté le 2 avril 2026. \url{https://www.coreweave.com/blog/nvidia-h100-gpu-benchmark-results-what-we-learned-from-large-scale-gpu-testing}
     \item How to handle common Xid events. Byteplus. Consulté le 2 avril 2026. \url{https://docs.byteplus.com/en/docs/mlp/How_to_handle_common_Xid_events}
     \item GPU Health. Modal Docs. Consulté le 2 avril 2026. \url{https://modal.com/docs/guide/gpu-health}
-    \item Performance Analysis for a Degrading System with Markov Model. ResearchGate. Consulté le 2 avril 2026. \url{https://www.researchgate.net/publication/363336255_Performance_analysis_for_a_degrading_system_with_Markov_model}
-    \item Fire-Flyer AI-HPC: A Cost-Effective Software-Hardware Co-Design for Deep Learning. arXiv. Consulté le 2 avril 2026. \url{https://arxiv.org/html/2408.14158v1}
-    \item A Dynamic Hidden Markov Model with Real-Time Updates for Multi-Risk Meteorological Forecasting in Offshore Wind Power. MDPI. Consulté le 2 avril 2026. \url{https://www.mdpi.com/2071-1050/17/8/3606}
-    \item Network motif detection using hidden markov models. PMC. Consulté le 2 avril 2026. \url{https://pmc.ncbi.nlm.nih.gov/articles/PMC12647810/}
-    \item Understanding Data Movement and Processing Platform at Netflix. MarkTechPost. Consulté le 2 avril 2026. \url{https://www.marktechpost.com/2022/09/02/understanding-data-movement-and-processing-platform-at-netflix/}
-    \item Markov Chain. Lark AI glossary. Consulté le 2 avril 2026. \url{https://www.larksuite.com/en_us/topics/ai-glossary/markov-chain}
-    \item Pre-trained Large Language Models Learn to Predict Hidden Markov Models In-context. OpenReview. Consulté le 2 avril 2026. \url{https://openreview.net/pdf/d9c6c3a5ef2b457a99d3851f69c626f9896663ed.pdf}
-    \item Understanding GPU errors on large-scale HPC systems and the implications for system design and operation. ResearchGate. Consulté le 2 avril 2026. \url{https://www.researchgate.net/publication/282377434_Understanding_GPU_errors_on_large-scale_HPC_systems_and_the_implications_for_system_design_and_operation}
-    \item Efficient Probabilistic Model Checking on General Purpose Graphics Processors. SPIN workshop. Consulté le 2 avril 2026. \url{https://spinroot.com/spin/symposia/ws09/Bosnacki.pdf}
-    \item SuperBench: Improving Cloud AI Infrastructure Reliability with Proactive Validation. USENIX ATC. Consulté le 2 avril 2026. \url{https://www.usenix.org/system/files/atc24-xiong.pdf}
-    \item A large-scale study of soft-errors on GPUs in the field. ResearchGate. Consulté le 2 avril 2026. \url{https://www.researchgate.net/publication/299641571_A_large-scale_study_of_soft-errors_on_GPUs_in_the_field}
-    \item BOA\_0622 resource. The Education University of Hong Kong. Consulté le 2 avril 2026. \url{https://www.eduhk.hk/eac-isba2024/BOA_0622.pdf}
-    \item NVIDIA DCGM. NVIDIA Developer. Consulté le 2 avril 2026. \url{https://developer.nvidia.com/dcgm}
-    \item GPU Cluster Monitoring: Real-Time Performance Analytics and Predictive Maintenance. Introl. Consulté le 2 avril 2026. \url{https://introl.com/blog/gpu-cluster-monitoring-real-time-analytics-predictive-maintenance}
-    \item Collect and view DCGM metrics. Google Kubernetes Engine (GKE). Consulté le 2 avril 2026. \url{https://docs.cloud.google.com/kubernetes-engine/docs/how-to/dcgm-metrics}
-    \item NVIDIA DCGM Monitoring: Setup, Metrics \& Alerts. MetricFire. Consulté le 2 avril 2026. \url{https://www.metricfire.com/blog/why-gpu-monitoring-matters-tracking-utilization-power-and-errors-with-dcgm/}
-    \item DCGM Release Notes. NVIDIA Documentation. Consulté le 2 avril 2026. \url{https://docs.nvidia.com/datacenter/dcgm/latest/release-notes/changelog.html}
-    \item XID Errors. NVIDIA Documentation. Consulté le 2 avril 2026. \url{https://docs.nvidia.com/deploy/pdf/XID_Errors.pdf}
-    \item Working with Xid Errors. NVIDIA Documentation. Consulté le 2 avril 2026. \url{https://docs.nvidia.com/deploy/xid-errors/working-with-xid-errors.html}
-    \item Algorithmic Techniques for GPU Scheduling: A Comprehensive Survey. Preprints.org. Consulté le 2 avril 2026. \url{https://www.preprints.org/manuscript/202505.0152/download/final_file}
-    \item Deep Reinforcement Learning for Job Scheduling and Resource Management in Cloud Computing: An Algorithm-Level Review. arXiv. Consulté le 2 avril 2026. \url{https://arxiv.org/html/2501.01007v1}
-    \item Condition-Based Maintenance scheduling of an aircraft fleet under partial observability. AGIFORS. Consulté le 2 avril 2026. \url{https://www.agifors.org/resources/Documents/Anna%20Valicek%20Papers/2024/04-Iordanis%20Tseremoglou%20-%20Paper%20-%20Condition-Based%20Maintenance%20scheduling%20of%20an%20aircraft%20fleet.pdf}
-    \item Joint Optimization of Time-Aware Condition-Based Maintenance and Repair Resource Management for Gantry Crane Clusters. IEEE Xplore. Consulté le 2 avril 2026. \url{https://ieeexplore.ieee.org/iel8/6287639/10380310/10788675.pdf}
-    \item Apostolos Kokolis's research works. ResearchGate. Consulté le 2 avril 2026. \url{https://www.researchgate.net/scientific-contributions/Apostolos-Kokolis-2155332310}
-    \item Predicting GPU Failures With High Precision Under Deep Learning Workloads. Cheng Tan et al. Consulté le 2 avril 2026. \url{https://naizhengtan.github.io/doc/papers/liu23predicting.pdf}
-    \item Nvidia DCGM Exporter. Datadog Docs. Consulté le 2 avril 2026. \url{https://docs.datadoghq.com/integrations/dcgm/}
 \end{enumerate}
 
 \end{document}
