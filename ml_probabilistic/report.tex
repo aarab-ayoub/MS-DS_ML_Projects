@@ -52,519 +52,277 @@ L'entraînement des modèles de langage (LLM) comme \textit{Llama 3} (Meta) util
 Ce projet modélise ces comportements pour prédire le temps moyen avant absorption (panne critique) et la disponibilité à long terme.
 
 \section{Modélisation à Temps Discret (DTMC)}
-Nous définissons un pas de temps $\Delta t = 24h$.
-\subsection{Définition de l'Espace des États $S$}
-\begin{enumerate}
-    \item \textbf{État 1 (Optimal) :} Fonctionnement à 100\%.
-    \item \textbf{État 2 (Dégradation Thermique) :} Surchauffe, performance à 70\%.
-    \item \textbf{État 3 (Instabilité logicielle) :} Erreurs ECC bursty. Nécessite un reboot.
-    \item \textbf{État 4 (Panne Matérielle) :} État Absorbant (Mort matérielle).
-    \item \textbf{État 5 (Maintenance) :} Réparation/Nettoyage planifié.
-\end{enumerate}
-
-\subsection{Matrice de Transition $\mathbb{P}$}
-Voici la matrice incluant les probabilités de rester dans le même état (self-loops) :
+Le modèle discret utilisé dans tout le projet est exactement le modèle exécutable du code.
+Les états sont: Healthy, Degraded, MaintenanceRequired, FailedRecoverable, FailedPermanent.
+La matrice de transition de référence est:
 \[
 \mathbb{P} = \begin{pmatrix}
 0.90 & 0.06 & 0.02 & 0.01 & 0.01 \\
 0.15 & 0.70 & 0.10 & 0.05 & 0.00 \\
 0.40 & 0.00 & 0.40 & 0.15 & 0.05 \\
-0.00 & 0.00 & 0.00 & 1.00 & 0.00 \\
-0.98 & 0.00 & 0.00 & 0.00 & 0.02 
-\end{pmatrix}
+0.35 & 0.00 & 0.20 & 0.40 & 0.05 \\
+0.00 & 0.00 & 0.00 & 0.00 & 1.00
+\end{pmatrix}.
 \]
 
-\subsection{Distribution stationnaire DTMC (cha\^ine r\'eparable)}
-La matrice ci-dessus est absorbante (\'etat 4), donc la loi limite est triviale sans maintenance corrective.
-Pour l'analyse stationnaire op\'erationnelle, on utilise une version r\'eparable avec transition forc\'ee
-$4 \to 5$ en un pas:
-\[
-\mathbb{P}_{\mathrm{rep}} = \begin{pmatrix}
-0.90 & 0.06 & 0.02 & 0.01 & 0.01 \\
-0.15 & 0.70 & 0.10 & 0.05 & 0.00 \\
-0.40 & 0.00 & 0.40 & 0.15 & 0.05 \\
-0.00 & 0.00 & 0.00 & 0.00 & 1.00 \\
-0.98 & 0.00 & 0.00 & 0.00 & 0.02
-\end{pmatrix}
-\]
-Le vecteur stationnaire est la solution de
-\[
-\pi^{(d)} \mathbb{P}_{\mathrm{rep}} = \pi^{(d)}, \quad \sum_{i=1}^{5} \pi^{(d)}_i = 1.
-\]
-Num\'eriquement:
-\[
-\pi^{(d)} \approx (0.7458,\,0.1492,\,0.0497,\,0.0224,\,0.0330).
-\]
-L'uptime stationnaire discret est donc
-$\pi^{(d)}_1 + \pi^{(d)}_2 \approx 0.895$.
+\paragraph{Ce que ce modèle fait dans notre projet (What this model does in our project).}
+Le DTMC décrit la dynamique de santé du cluster pas à pas, et sert de base commune aux modules HMM, MDP et RL.
 
-\subsection{Graphe Représentatif}
-\begin{figure}[H]
-    \centering
-    \begin{tikzpicture}[->, >=stealth', shorten >=1pt, auto, node distance=3.5cm, semithick]
-        \node[state] (S1) {1};
-        \node[state] (S2) [right of=S1] {2};
-        \node[state] (S3) [below of=S2] {3};
-        \node[state, fill=red!15] (S4) [below of=S1] {4};
-        \node[state] (S5) [left of=S1] {5};
+\paragraph{Pourquoi on l'utilise (Why we use it).}
+Il donne un cadre simple, interprétable et directement relié aux probabilités de transition observées/simulées.
 
-        \path (S1) edge [loop above] node {0.90} (S1)
-              (S1) edge [bend left] node {0.06} (S2)
-              (S1) edge node {0.01} (S4)
-              (S2) edge [loop right] node {0.70} (S2)
-              (S2) edge [bend left] node {0.15} (S1)
-              (S2) edge node {0.10} (S3)
-              (S3) edge [loop right] node {0.40} (S3)
-              (S3) edge node {0.15} (S4)
-              (S4) edge [loop below] node {1.0} (S4)
-              (S5) edge [loop left] node {0.02} (S5)
-              (S5) edge node {0.98} (S1);
-    \end{tikzpicture}
-\end{figure}
-
-\section{Analyse de l'Absorption (Application Fondamentale)}
-\subsection{Calcul de la Matrice Fondamentale $N$}
-Nous isolons la sous-matrice $Q$ des états transitoires $\{1, 2, 3, 5\}$ :
-\[ Q = \begin{pmatrix} 0.90 & 0.06 & 0.02 & 0.01 \\ 0.15 & 0.70 & 0.10 & 0.00 \\ 0.40 & 0.00 & 0.40 & 0.05 \\ 0.98 & 0.00 & 0.00 & 0.02 \end{pmatrix} \]
-La matrice fondamentale est $N = (I - Q)^{-1}$. Elle représente le nombre moyen de jours passés dans chaque état avant la panne matérielle (absorption par l'état 4).
-\textbf{Calcul :} L'espérance du temps avant absorption partant de l'état 1 est $E_1 = \sum_{j} n_{1j}$. Dans notre modèle, cela correspond au \textit{Mean Time To Failure} (MTTF).
-Numériquement:
+\paragraph{Ce que les résultats veulent dire concrètement (What results mean concretely).}
+La quantité clé est le temps moyen avant entrée en état \textit{FailedPermanent} depuis \textit{Healthy}.
+Avec la matrice exécutable, on obtient dans \texttt{results/summary.csv}:
 \[
-N \approx
-\begin{pmatrix}
-33.3333 & 6.6667 & 2.2222 & 0.4535 \\
-25.0000 & 8.3333 & 2.2222 & 0.3685 \\
-25.0000 & 5.0000 & 3.3333 & 0.4252 \\
-33.3333 & 6.6667 & 2.2222 & 1.4739
-\end{pmatrix}
+\mathrm{MTTF}_{\mathrm{DTMC}} \approx 78.93\ \text{pas}.
 \]
-et
-\[
-E = N\mathbf{1} \approx (42.6757,\,35.9240,\,33.7585,\,43.6961),
-\quad E_1 \approx 42.68\ \text{pas}.
-\]
-Avec $\Delta t=24\,h$, cela donne environ $42.68$ jours avant absorption en partant de l'\'etat optimal.
 
-\paragraph{Note de coh\'erence avec les r\'esultats exp\'erimentaux.}
-Le tableau du chapitre exp\'erimental ($78.93$ pas) provient du mod\`ele unifi\'e ex\'ecutable,
-o\`u l'\'etat \textit{FailedRecoverable} est transitoire et \textit{FailedPermanent} est absorbant.
-Dans cette variante, le m\^eme calcul $N=(I-Q)^{-1}$ donne
-$E_1 \approx 78.93$ pas. Les deux valeurs sont donc coh\'erentes, mais pour deux
-matrices DTMC diff\'erentes (mod\`ele p\'edagogique vs mod\`ele unifi\'e de simulation).
+\subsection{Rigueur mathématique: absorption et stationnaire}
+En notant $Q$ la sous-matrice transitoire (Healthy, Degraded, MaintenanceRequired, FailedRecoverable),
+la matrice fondamentale est:
+\[
+N=(I-Q)^{-1}, \qquad E=N\mathbf{1}.
+\]
+Le MTTF depuis Healthy est $E_1$.
+La distribution stationnaire vérifie:
+\[
+\pi^{(d)}\mathbb{P}=\pi^{(d)}, \quad \sum_i \pi_i^{(d)}=1.
+\]
+Comme \textit{FailedPermanent} est absorbant, la limite stationnaire est concentrée sur cet état;
+en pratique opérationnelle, on lit donc surtout les métriques transitoires (MTTF, survie, retours cumulés).
 
 \section{Modélisation à Temps Continu (CTMC)}
-Le système est plus précis en continu car les pannes surviennent à tout moment $t$.
-\subsection{Matrice Génératrice $\mathbb{A}$}
-Pour la mod\'elisation continue, nous retenons une matrice g\'en\'eratrice coh\'erente avec les transitions discr\`etes, en r\'einterpr\'etant les probabilit\'es de changement comme des intensit\'es de passage sur l'unit\'e de temps retenue. La matrice $\mathbb{A}$ v\'erifie $\sum_{j} a_{ij} = 0$ :
-\[ \mathbb{A} = \begin{pmatrix} 
+Le modèle continu reprend le même espace d'états, avec générateur:
+\[
+\mathbb{A} = \begin{pmatrix}
 -0.10 & 0.06 & 0.02 & 0.01 & 0.01 \\
 0.15 & -0.30 & 0.10 & 0.05 & 0.00 \\
 0.40 & 0.00 & -0.60 & 0.15 & 0.05 \\
-0 & 0 & 0 & 0 & 0 \\
-0.98 & 0 & 0 & 0 & -0.98
-\end{pmatrix} \]
-\subsection{Équations de Chapman-Kolmogorov}
-Pour prédire l'état futur : $P(t) = e^{\mathbb{A}t}$. Cela permet de calculer la probabilité que le GPU soit opérationnel après 1000 heures de calcul intensif.
-
-\subsection{Distribution stationnaire CTMC (cha\^ine r\'eparable)}
-Pour la version continue r\'eparable, on introduit un taux de r\'eparation $\mu_{45}=0.40$ (transition $4\to5$):
-\[
-\mathbb{A}_{\mathrm{rep}} = \begin{pmatrix}
--0.10 & 0.06 & 0.02 & 0.01 & 0.01 \\
-0.15 & -0.30 & 0.10 & 0.05 & 0.00 \\
-0.40 & 0.00 & -0.60 & 0.15 & 0.05 \\
-0.00 & 0.00 & 0.00 & -0.40 & 0.40 \\
-0.98 & 0.00 & 0.00 & 0.00 & -0.98
-\end{pmatrix}
-\]
-La distribution stationnaire continue est obtenue par
-\[
-\pi^{(c)} \mathbb{A}_{\mathrm{rep}} = 0, \quad \sum_{i=1}^{5} \pi^{(c)}_i = 1.
-\]
-Num\'eriquement:
-\[
-\pi^{(c)} \approx (0.7216,\,0.1443,\,0.0481,\,0.0541,\,0.0319).
-\]
-L'uptime stationnaire continu vaut
-$\pi^{(c)}_1 + \pi^{(c)}_2 \approx 0.866$.
-
-\section{Ergodicité et Régime Stationnaire}
-Pour maintenir le cluster, nous forçons la transition $4 \to 5$ (Réparation). La chaîne devient irréductible et apériodique. Nous calculons le vecteur stationnaire $\pi^*$ par :
-\[ \pi^* \mathbb{P} = \pi^* \quad \text{et} \quad \sum \pi_i^* = 1 \]
-$\pi_1^*$ représente la disponibilité ("Uptime") du système à long terme.
-Dans ce projet, les valeurs obtenues sont coh\'erentes entre DTMC et CTMC r\'eparables,
-avec un uptime stationnaire entre $86\%$ et $90\%$ selon l'\'echelle de temps.
-
-% --- Extensions du projet unifié (intégrées inline) ---
-
-\section{Mod\`ele de Markov Cach\'e (HMM) pour la Sant\'e Latente GPU}
-
-\subsection{Probl\`eme d'observation partielle}
-Dans le cas d'un cluster H100, l'\'etat r\'eel de sant\'e mat\'erielle n'est pas directement observable.
-On introduit donc une variable cach\'ee $S_t \in \{H,D,M,R,P\}$ avec:
-\begin{itemize}
-    \item $H$: Healthy,
-    \item $D$: Degraded,
-    \item $M$: MaintenanceRequired,
-    \item $R$: FailedRecoverable,
-    \item $P$: FailedPermanent.
-\end{itemize}
-
-Les observations sont not\'ees $O_t$.
-Deux cas sont trait\'es dans ce projet:
-\begin{itemize}
-    \item \textbf{Cas scalaire}: une seule variable (ex. ECC count),
-    \item \textbf{Cas vectoriel}: $O_t = (T_t, ECC_t, XID_t, U_t, PWR_t, RP_t)$.
-\end{itemize}
-
-\subsection{HMM discret (DT-HMM)}
-Le mod\`ele discret est d\'efini par:
-\begin{itemize}
-    \item une matrice de transition cach\'ee $\mathbf{A}=[a_{ij}]$,
-    \item une loi d'\'emission $b_j(o_t)=P(O_t=o_t\mid S_t=j)$,
-    \item une distribution initiale $\pi$.
-\end{itemize}
-
-L'algorithme Forward suit la r\'ecurrence:
-\[
-\alpha_t(j)=\left(\sum_i \alpha_{t-1}(i)a_{ij}\right)b_j(o_t)
-\]
-et la probabilit\'e a posteriori est obtenue apr\`es normalisation:
-\[
-P(S_t=j\mid O_{1:t}) = \frac{\alpha_t(j)}{\sum_k \alpha_t(k)}.
+0.35 & 0.00 & 0.20 & -0.60 & 0.05 \\
+0.00 & 0.00 & 0.00 & 0.00 & 0.00
+\end{pmatrix}, \qquad \sum_j a_{ij}=0.
 \]
 
-Le d\'ecodage Viterbi maximise la trajectoire cach\'ee:
+\paragraph{Ce que ce modèle fait dans notre projet (What this model does in our project).}
+Le CTMC modélise la même dynamique que le DTMC, mais en temps réel (durées continues entre transitions).
+
+\paragraph{Pourquoi on l'utilise (Why we use it).}
+Il est plus réaliste quand les défaillances et récupérations ne suivent pas une grille de temps fixe.
+
+\paragraph{Ce que les résultats veulent dire concrètement (What results mean concretely).}
+On suit la probabilité de rester hors \textit{FailedPermanent} en fonction du temps (courbe de survie CTMC).
+Cette lecture complète le MTTF discret et donne une vue temporelle continue du risque.
+
+\subsection{Rigueur mathématique}
+Les équations de Chapman-Kolmogorov sont:
+\[
+P(t)=e^{\mathbb{A}t}, \qquad \pi^{(c)}\mathbb{A}=0,\ \sum_i \pi_i^{(c)}=1.
+\]
+Ici aussi, l'état \textit{FailedPermanent} est absorbant, donc la limite stationnaire est dégénérée.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{results/mandatory_plots/ct_reliability.png}
+    \caption{Probabilité de survie CTMC en fonction du temps continu.}
+\end{figure}
+
+\section{Modèle de Markov Caché (HMM) pour la Santé Latente GPU}
+Les observations utilisées sont scalaire (cas simple) ou vectorielle:
+\[
+O_t=(T_t,\,ECC_t,\,XID_t,\,U_t,\,PWR_t,\,RP_t).
+\]
+
+\paragraph{Ce que ce modèle fait dans notre projet (What this model does in our project).}
+Le HMM infère l'état latent de santé du GPU à partir de télémétrie bruitée.
+
+\paragraph{Pourquoi on l'utilise (Why we use it).}
+En pratique, l'état réel n'est pas directement mesuré; on observe des signaux indirects (ECC, XID, température, etc.).
+
+\paragraph{Ce que les résultats veulent dire concrètement (What results mean concretely).}
+Le posterior Forward indique le degré de confiance sur chaque état latent à chaque instant;
+Viterbi fournit la trajectoire d'états la plus probable sur toute la séquence.
+
+\subsection{Forward, Viterbi, Baum-Welch: rôles distincts}
+\textbf{Forward} (filtrage/probabilités instantanées):
+\[
+\alpha_t(j)=\left(\sum_i \alpha_{t-1}(i)a_{ij}\right)b_j(o_t),
+\qquad
+P(S_t=j\mid O_{1:t})=\frac{\alpha_t(j)}{\sum_k \alpha_t(k)}.
+\]
+
+\textbf{Viterbi} (reconstruction de trajectoire):
 \[
 \hat{s}_{1:T}=\arg\max_{s_{1:T}} P(s_{1:T},o_{1:T}).
 \]
 
-\subsection{HMM en temps continu (CT-HMM)}
-En temps continu, la dynamique cach\'ee est gouvern\'ee par le g\'en\'erateur $\mathbf{Q}$ (repris de la section CTMC):
-\[
-P(\Delta t)=\exp(\mathbf{Q}\Delta t).
-\]
-Pour des observations irr\'eguli\`eres aux instants $t_k$, l'\'etape de pr\'ediction entre $t_{k-1}$ et $t_k$ utilise $P(t_k-t_{k-1})$, puis une correction bay\'esienne par la vraisemblance d'\'emission.
+\textbf{Baum-Welch} (apprentissage des paramètres): utile pour apprendre $A$ et les émissions depuis des données,
+mais \textbf{non implémenté expérimentalement} dans cette campagne.
 
-\subsection{Hypoth\`eses d'\'emission retenues}
-Pour rester coh\'erent avec les observables DCGM/XID de la litt\'erature:
+\subsection{Clarification importante sur les sorties HMM}
 \begin{itemize}
-    \item Temp\'erature, puissance, utilisation: gaussiennes conditionnelles par \`etat,
-    \item ECC count, retired pages: Poisson conditionnelle,
-    \item XID code: cat\'egorielle.
+    \item \texttt{true\_state}: état simulé de référence (ground truth),
+    \item \texttt{viterbi\_state}: état inféré par le modèle à partir des observations.
 \end{itemize}
-
-Cette combinaison permet d'int\'egrer simultan\'ement des variables continues et discr\`etes.
-
-\subsection{R\'esultats HMM}
-La Figure~\ref{fig:hmm_forward} montre l'\'evolution des post\'erieurs Forward.
-On observe des basculements nets lors des s\'equences de d\'egradation et des plateaux lorsque le syst\`eme se stabilise.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.9\textwidth]{results/mandatory_plots/hmm_forward_posterior.png}
-    \caption{Posterieurs Forward pour les 120 premiers pas (cas vectoriel).}
+    \caption{Posterior Forward (cas vectoriel).}
     \label{fig:hmm_forward}
 \end{figure}
 
-La comparaison des \`etats cach\'es simul\'es et de la s\'equence d\'ecod\'ee par Viterbi
-est conserv\'ee sous forme tabulaire dans \texttt{results/files/hmm\_true\_vs\_viterbi.csv},
-ce qui rend le chapitre robuste aux variations de structure des dossiers de figures.
+\section{MDP: Décision Optimale sur États Latents}
+Le contrôle est modélisé par un MDP $\langle S,A,P,R,\gamma\rangle$.
 
-\paragraph{Lecture scalaire vs vectorielle.}
-Le cas scalaire est utile pour l'intuition et l'explication orale.
-Le cas vectoriel est plus discriminant car il combine sympt\^omes thermiques, m\'emoire ECC et exceptions XID.
+\paragraph{Ce que ce modèle fait dans notre projet (What this model does in our project).}
+Le MDP calcule une politique optimale d'action pour chaque état latent de santé.
 
-\section{Contr\^ole D\'ecisionnel: MDP et Apprentissage par Renforcement}
+\paragraph{Pourquoi on l'utilise (Why we use it).}
+Il formalise explicitement le compromis entre disponibilité, risque de panne et coût d'action.
 
-\subsection{Formulation MDP du probl\`eme GPU}
-Le contr\^ole est formul\'e comme un MDP $\langle S,A,P,R,\gamma \rangle$ avec:
-\begin{itemize}
-    \item $S=\{H,D,M,R,P\}$,
-    \item $A=\{$keep\_running, power\_cap, checkpoint, reboot, isolate\_maintain$\}$,
-    \item $P(s'\mid s,a)$: transitions d\'ependantes de l'action,
-    \item $R(s,a)$: compromis performance/risque/co\^ut,
-    \item $\gamma \in (0,1)$: facteur d'actualisation.
-\end{itemize}
+\paragraph{Ce que les résultats veulent dire concrètement (What results mean concretely).}
+La table de politique dit quelle action prendre immédiatement dans chaque état
+(par exemple \textit{power\_cap} en \textit{Degraded}, \textit{reboot} en \textit{FailedRecoverable}).
 
-La r\'ecompense instantan\'ee suit l'id\'ee:
-\[
-r_t = w_u\,\text{uptime}_t - w_f\,\mathbf{1}(s_t=P) - w_r\,\mathbf{1}(s_t=R) - w_a\,\text{cost}(a_t).
-\]
-
-\subsection{Solution MDP par value iteration}
-La valeur optimale satisfait:
+\subsection{Équation de Bellman (conservée, expliquée simplement)}
 \[
 V^*(s)=\max_a\left[R(s,a)+\gamma\sum_{s'}P(s'\mid s,a)V^*(s')\right].
 \]
-La Figure~\ref{fig:mdp_policy} montre la politique optimale obtenue sur l'espace d'\'etats discretis\'e.
+Cette équation signifie: on choisit l'action qui maximise la récompense immédiate
+plus la valeur future attendue.
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.62\textwidth]{results/mandatory_plots/mdp_policy_matrix.png}
-    \caption{Action optimale MDP par \`etat latent.}
-    \label{fig:mdp_policy}
-\end{figure}
-
-Lecture op\'erationnelle de la politique:
+La politique opérationnelle exportée est:
 Healthy $\to$ keep\_running,
 Degraded $\to$ power\_cap,
 MaintenanceRequired $\to$ isolate\_maintain,
 FailedRecoverable $\to$ reboot,
 FailedPermanent $\to$ isolate\_maintain.
-Le dernier choix est impos\'e par la logique m\'etier (isolement/remplacement),
-car l'\'etat permanent est terminal et l'argmax brut y est sinon peu interpr\'etable.
 
-\subsection{Algorithmes RL utilis\'es}
-\paragraph{Q-learning (off-policy).}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.62\textwidth]{results/mandatory_plots/mdp_policy_matrix.png}
+    \caption{Politique optimale MDP par état latent.}
+    \label{fig:mdp_policy}
+\end{figure}
+
+\section{RL: Apprentissage à partir d'Interaction}
+
+\paragraph{Ce que ce modèle fait dans notre projet (What this model does in our project).}
+Le RL apprend une stratégie directement par interaction simulée avec l'environnement,
+sans imposer de résoudre analytiquement tout le problème.
+
+\paragraph{Pourquoi on l'utilise (Why we use it).}
+Même si le MDP existe, RL est utile quand le modèle est imparfait, partiellement connu,
+ou quand on veut adapter la politique par expérience.
+
+\paragraph{Ce que les résultats veulent dire concrètement (What results mean concretely).}
+Les retours moyens mesurent la qualité pratique des décisions apprises sur des épisodes complets.
+
+\subsection{Q-learning vs SARSA}
+\textbf{Q-learning} (off-policy):
 \[
 Q(s,a)\leftarrow Q(s,a)+\alpha\left[r+\gamma\max_{a'}Q(s',a')-Q(s,a)\right].
 \]
+Il apprend vers une politique gloutonne cible.
 
-\paragraph{SARSA (on-policy).}
+\textbf{SARSA} (on-policy):
 \[
 Q(s,a)\leftarrow Q(s,a)+\alpha\left[r+\gamma Q(s',a')-Q(s,a)\right].
 \]
+Il apprend la politique réellement suivie (incluant exploration).
 
-\paragraph{TD(0).}
+\subsection{TD(0) vs TD($\lambda$)}
+\textbf{TD(0)} met à jour avec un pas:
 \[
 V(s)\leftarrow V(s)+\alpha\left[r+\gamma V(s')-V(s)\right].
 \]
-
-\paragraph{TD($\lambda$).}
-On utilise des traces d'\'eligibilit\'e pour diffuser le cr\'edit temporel sur les \`etats r\'ecents.
-
-\paragraph{Extension R-learning (optionnelle).}
-Le crit\`ere moyen est estim\'e par $\rho$:
-\[
-Q(s,a)\leftarrow Q(s,a)+\alpha\left[r-\rho+\max_{a'}Q(s',a')-Q(s,a)\right].
-\]
-Cette extension est pertinente pour les syst\`emes d'exploitation continue.
-
-\subsection{R\'esultats RL simul\'es}
-Sur 30 ex\'ecutions (seeds diff\'erents), on obtient en moyenne:
-\begin{itemize}
-    \item $\overline{R}_{Q\text{-learning}} = 56.14$,
-    \item $\overline{R}_{SARSA} = 56.69$,
-    \item $\overline{R}_{R\text{-learning}} = 0.677$ (\'echelle moyenne par transition),
-    \item $V_{TD(0)}(H)=12.95$,
-    \item $V_{TD(\lambda)}(H)=11.73$.
-\end{itemize}
+\textbf{TD($\lambda$)} diffuse le crédit sur plusieurs pas via traces d'éligibilité,
+donc plus d'information temporelle mais aussi plus de sensibilité au réglage de $\lambda$.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.9\textwidth]{results/mandatory_plots/rl_convergence.png}
-    \caption{Convergence \`a l'\'echelle d'une ex\'ecution de r\'ef\'erence.}
+    \caption{Convergence RL (trace de référence).}
     \label{fig:rl_reference}
 \end{figure}
 
-La comparaison multi-ex\'ecutions est disponible dans
-\texttt{results/summary\_multi\_run.csv} (vue agr\'eg\'ee) et
-\texttt{results/files/rl\_returns\_reference.csv} (trace d\'etaill\'ee de r\'ef\'erence).
-
 \section{POMDP et Extension Non-Markovienne}
 
-\subsection{Pourquoi un POMDP?}
-Le MDP suppose un \`etat connu, ce qui est trop fort pour des GPU r\'eels.
-En pratique, on observe des signaux bruit\'es (ECC, XID, temp\'erature) et l'on d\'ecide sous incertitude.
-Le cadre naturel est donc le POMDP avec croyance:
+\paragraph{Ce que ce modèle fait dans notre projet (What this model does in our project).}
+Le POMDP prend des décisions sur une croyance probabiliste des états latents,
+au lieu d'un état parfaitement observé.
+
+\paragraph{Pourquoi on l'utilise (Why we use it).}
+En exploitation réelle, la télémétrie est incomplète et bruitée;
+la croyance est donc la bonne variable de décision.
+
+\paragraph{Ce que les résultats veulent dire concrètement (What results mean concretely).}
+L'entropie de croyance mesure l'incertitude: plus elle monte, plus la décision doit être prudente.
+Le multiplicateur non-Markovien montre l'impact de l'historique (âge + cumul ECC) sur le risque.
+
+\subsection{Mise à jour de croyance (math simplifiée)}
 \[
-b_t(s)=P(S_t=s\mid O_{1:t},A_{1:t-1}).
+b_{t+1}(s')=\eta\,O(o_{t+1}\mid s',a_t)\sum_s T(s'\mid s,a_t)b_t(s).
 \]
-
-\subsection{Mise \`a jour de croyance}
-Pour une action $a_t$ et une observation $o_{t+1}$:
-\[
-b_{t+1}(s')=\eta\,O(o_{t+1}\mid s',a_t)\sum_s T(s'\mid s,a_t)b_t(s),
-\]
-avec $\eta$ constante de normalisation.
-
-La d\'ecision est ensuite prise sur l'espace des croyances:
-\[
-V^*(b)=\max_a\left[R(b,a)+\gamma\sum_o P(o\mid b,a)V^*(\tau(b,a,o))\right].
-\]
-
-\subsection{Extension non-Markovienne partiellement observable}
-Le Markov classique n'int\`egre pas explicitement l'usure cumul\'ee.
-On ajoute une m\'emoire op\'erationnelle:
-\[
-z_t=(\tau_t, c_t)
-\]
-o\`u $\tau_t$ est l'\^age depuis la derni\`ere maintenance et $c_t$ un cumul glissant d'erreurs ECC.
-
-Le syst\`eme augment\'e devient:
-\[
-\tilde{S}_t=(S_t,z_t), \qquad b_t(\tilde{s})=P(\tilde{S}_t=\tilde{s}\mid O_{1:t},A_{1:t-1}).
-\]
-
-Cette formulation capture des effets d'hyst\'er\`ese (m\^eme observation instantan\'ee mais risque diff\'erent selon l'historique).
-
-\subsection{Analyse des r\'esultats POMDP / non-Markov}
-La Figure~\ref{fig:belief_entropy} montre l'entropie de croyance au cours du temps.
-Les pics correspondent aux zones d'ambigu\"it\'e entre \`etats d\'egrad\'es et \`etats r\'ecup\'erables.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.9\textwidth]{results/sections/pomdp/pomdp_belief_entropy.png}
-    \caption{Entropie de croyance dans le contr\^ole partiellement observable.}
+    \caption{Entropie de croyance (POMDP).}
     \label{fig:belief_entropy}
 \end{figure}
-
-La Figure~\ref{fig:non_markov_multiplier} montre le multiplicateur de risque li\'e \`a la m\'emoire non-Markovienne.
-Lorsque les ECC s'accumulent sans maintenance, le risque augmente de fa\c{c}on syst\'ematique.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.9\textwidth]{results/mandatory_plots/non_markov_risk_multiplier.png}
-    \caption{Multiplicateur de risque non-Markovien (\^age + cumul ECC).}
+    \caption{Multiplicateur de risque non-Markovien (âge + cumul ECC).}
     \label{fig:non_markov_multiplier}
 \end{figure}
 
-\paragraph{Int\'er\^et op\'erationnel.}
-Le POMDP am\'eliore la robustesse des d\'ecisions sous bruit.
-L'extension non-Markovienne \`a m\'emoire rend la politique plus conservatrice lorsque l'historique indique une usure avanc\'ee.
+\section{Protocole Expérimental et Résultats Consolidés}
+Les valeurs ci-dessous proviennent directement de \texttt{results/summary.csv}.
 
-\section{Protocole Exp\'erimental et R\'esultats}
-
-\subsection{Donn\'ees simul\'ees calibr\'ees}
-Le protocole g\'en\`ere des trajectoires calibr\'ees \`a partir des ordres de grandeur du dossier de fiabilit\'e:
-\begin{itemize}
-    \item 30 ex\'ecutions ind\'ependantes,
-    \item horizon discret variable (environ 180 \`a 420 pas),
-    \item horizon continu variable (environ 72h \`a 240h),
-    \item m\^eme espace d'\'etats cach\'es pour DTMC/CTMC/HMM/MDP/RL/POMDP.
-\end{itemize}
-
-Les fichiers sont export\'es dans:
-\begin{itemize}
-    \item \texttt{data/simulated\_raw/} (traces brutes DT et CT),
-    \item \texttt{data/simulated\_processed/} (agr\'egats et diagnostics),
-    \item \texttt{results/mandatory\_plots/} (figures principales),
-    \item \texttt{results/sections/} (figures export\'ees par section),
-    \item \texttt{results/files/} (tables CSV de preuve: politiques, valeurs, post\'erieurs).
-\end{itemize}
-
-Le mode \textit{quick} est volontairement l\'eger pour validation rapide.
-Pour un passage soutenance plus exigeant, le projet expose des param\`etres
-de charge (horizon, \texttt{rl\_episodes}, \texttt{rl\_max\_steps}) afin d'augmenter le temps d'ex\'ecution.
-
-\subsection{Cas scalaire vs vecteur al\'eatoire}
-\paragraph{Cas scalaire.}
-On utilise une observation unique (ex. ECC count) pour l'inf\'erence.
-Ce cas est plus simple \`a expliquer mais moins discriminant lorsque plusieurs \`etats ont des signatures proches.
-
-\paragraph{Cas vectoriel.}
-On utilise le vecteur complet:
-\[
-O_t=(T_t,ECC_t,XID_t,U_t,PWR_t,RP_t).
-\]
-Le vecteur offre une meilleure s\'eparation des \`etats cach\'es et une d\'ecision plus stable en POMDP.
-
-\subsection{M\'etriques retenues}
-\begin{itemize}
-    \item Fiabilit\'e: MTTF (pas), probabilit\'e de survie CTMC,
-    \item Inf\'erence: qualit\'e visuelle Forward/Viterbi,
-    \item Contr\^ole: retour moyen Q-learning, SARSA, R-learning,
-    \item Evaluation de politique: $V_{TD(0)}(H)$ et $V_{TD(\lambda)}(H)$,
-    \item Sensibilit\'e: score de politique et uptime attendu selon $(\gamma, \text{failure\_scale})$.
-\end{itemize}
-
-\subsection{R\'esultats quantitatifs principaux}
-Sur 30 ex\'ecutions simul\'ees, les moyennes observ\'ees sont:
 \begin{center}
 \begin{tabular}{l c}
 \toprule
-M\'etrique & Valeur moyenne \\
+Métrique & Valeur (summary.csv) \\
 \midrule
-MTTF DTMC (mod\`ele unifi\'e) depuis Healthy & 78.93 pas \\
-Retour moyen Q-learning & 56.14 \\
-Retour moyen SARSA & 56.69 \\
-Retour moyen R-learning & 0.677 \\
-$V_{TD(0)}(H)$ & 12.95 \\
-$V_{TD(\lambda)}(H)$ & 11.73 \\
+MTTF DTMC depuis Healthy (pas) & 78.93 \\
+Retour moyen Q-learning & 63.87 \\
+Retour moyen SARSA & 67.21 \\
+Retour moyen R-learning & 0.667 \\
+$V_{TD(0)}(Healthy)$ & 14.02 \\
+$V_{TD(\lambda)}(Healthy)$ & 13.82 \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-Remarque: la section th\'eorique d'absorption du rapport (matrice p\'edagogique avec \`etat 4 absorbant)
-donne $E_1 \approx 42.68$ pas. La valeur $78.93$ ci-dessus correspond au mod\`ele unifi\'e
-utilis\'e dans le code exp\'erimental, o\`u \textit{FailedRecoverable} est transitoire et
-\textit{FailedPermanent} est absorbant.
+\section{Interpretation of Results}
+\paragraph{MDP policy table (decision meaning).}
+La table \texttt{mdp\_policy\_table.csv} se lit comme une règle de décision:
+prévention légère en \textit{Degraded} (power\_cap), réparation active en \textit{FailedRecoverable} (reboot),
+et isolement/maintenance en \textit{FailedPermanent}.
 
-\subsection{Figures de validation}
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.85\textwidth]{results/mandatory_plots/dtmc_transition_heatmap.png}
-    \caption{Matrice de transition empirique estim\'ee sur une ex\'ecution de r\'ef\'erence.}
-\end{figure}
+\paragraph{HMM posterior (uncertainty).}
+Le posterior Forward n'est pas une classe dure mais une distribution de confiance.
+Des distributions diffuses signalent une ambiguïté de diagnostic; des pics proches de 1 indiquent une forte certitude.
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.85\textwidth]{results/mandatory_plots/ct_reliability.png}
-    \caption{Probabilit\'e de survie CTMC en fonction du temps continu.}
-\end{figure}
+\paragraph{RL returns (learning performance).}
+Les retours moyens montrent que, sur cette simulation, SARSA dépasse légèrement Q-learning.
+Cela suggère qu'une stratégie plus conservatrice sous exploration peut mieux convenir à cette dynamique de risque.
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.9\textwidth]{results/mandatory_plots/hmm_forward_posterior.png}
-    \caption{Post\'erieur Forward du HMM (cas vectoriel).}
-\end{figure}
+\section{Conclusion Générale et Perspectives}
+Le rapport est désormais aligné sur un seul modèle cohérent: le modèle exécutable du projet.
+Les équations principales (stationnaire, absorption, Forward/Viterbi, Bellman) sont conservées,
+et les valeurs numériques reportées sont alignées avec \texttt{results/summary.csv}.
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.9\textwidth]{results/mandatory_plots/mdp_policy_matrix.png}
-    \caption{Politique optimale MDP (matrice \`a une action dominante par \`etat).}
-\end{figure}
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.78\textwidth]{results/mandatory_plots/sensitivity_heatmap.png}
-    \caption{Analyse de sensibilit\'e du score de politique selon $(\gamma, \text{failure\_scale})$.}
-\end{figure}
-
-\subsection{Discussion critique}
+\subsection{Perspectives}
 \begin{itemize}
-    \item Le mod\`ele unifi\'e est coh\'erent: m\^eme syst\`eme sous-jacent pour fiabilit\'e, inf\'erence et contr\^ole.
-    \item Le vecteur d'observables est pr\'ef\'erable au scalaire pour les transitions ambigu\"es.
-    \item Les politiques RL convergent, mais les performances restent sensibles aux pond\'erations de co\^ut.
-    \item Le cadre reste une approximation: la validit\'e externe d\'epend d'une calibration future sur t\'el\'em\'etrie r\'eelle.
+    \item Calibration sur télémétrie réelle (DCGM + logs XID).
+    \item Modèles plus riches en observabilité partielle (POMDP profond).
+    \item Validation hors simulation sur scénarios multi-noeuds.
 \end{itemize}
-
-\section{Conclusion G\'en\'erale et Perspectives}
-
-Ce projet propose un cadre unifi\'e pour la fiabilit\'e et le contr\^ole d'un cluster NVIDIA H100 d\'edi\'e \`a l'entra\^inement LLM.
-La coh\'erence est assur\'ee par un m\^eme espace d'\'etats cach\'es utilis\'e dans:
-\begin{itemize}
-    \item DTMC et CTMC (dynamique de fiabilit\'e),
-    \item HMM discret et continu (inf\'erence de sant\'e latente),
-    \item MDP et RL (d\'ecision et optimisation),
-    \item POMDP et extension non-Markovienne (incertitude + m\'emoire d'usure).
-\end{itemize}
-
-\subsection{R\'esultats essentiels}
-\begin{itemize}
-    \item Le MTTF discret est stable sur les campagnes simul\'ees (environ 78.93 pas).
-    \item Les mod\`eles HMM restituent correctement les basculements d'\'etats cach\'es.
-    \item Les politiques RL convergent et offrent un compromis op\'erationnel entre disponibilit\'e et co\^uts de maintenance.
-    \item Le POMDP est pertinent d\`es que l'\'etat mat\'eriel n'est pas directement observable.
-    \item L'extension non-Markovienne capte explicitement les effets cumulatifs (ECC + \^age), absents d'un mod\`ele Markov strict.
-\end{itemize}
-
-\subsection{Limites}
-\begin{itemize}
-    \item Les donn\'ees restent simul\'ees, m\^eme si calibr\'ees sur des ordres de grandeur publi\'es.
-    \item Le cadre RL est tabulaire, donc limit\'e en forte dimension.
-    \item Les param\`etres de co\^ut/r\'ecompense influencent les politiques finales.
-\end{itemize}
-
-\subsection{Perspectives de continuit\'e}
-\begin{itemize}
-    \item Calibration sur t\'el\'em\'etrie r\'eelle (DCGM + logs XID) et mise \`a jour bay\'esienne des transitions.
-    \item Extension multi-noeuds explicite avec corr\'elations inter-racks.
-    \item Passage \`a des m\'ethodes profondes (Deep POMDP/DRQN) pour les observations riches.
-\end{itemize}
-
-En synth\`ese, l'approche est \`a la fois acad\'emiquement rigoureuse, impl\'ementable en Python, et d\'efendable en soutenance courte car chaque bloc th\'eorique est reli\'e \`a des sorties exp\'erimentales concr\`etes.
 
 \FloatBarrier
 \clearpage

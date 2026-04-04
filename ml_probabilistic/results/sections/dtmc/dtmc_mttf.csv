@@ -1,6 +1,6 @@
 state,mttf_steps
-Healthy,78.92857142857154
-Degraded,78.8392857142858
+Healthy,78.92857142857152
+Degraded,78.83928571428578
 MaintenanceRequired,72.23214285714295
 FailedRecoverable,71.78571428571438
 FailedPermanent,

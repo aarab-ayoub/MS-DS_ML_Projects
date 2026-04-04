@@ -8,6 +8,7 @@
 \usepackage{booktabs}
 \usepackage{hyperref}
 \usepackage{tikz}
+\usepackage{amsmath}
 \usetikzlibrary{arrows.meta, positioning, shapes.geometric}
 
 % --- THEME AND COLOR SCHEME ---
@@ -24,6 +25,8 @@
 \setbeamercolor{title}{bg=coverblue,fg=white}
 \setbeamercolor{frametitle}{bg=coverblue,fg=white}
 \setbeamercolor{block title}{bg=coverblue,fg=white}
+\setbeamertemplate{navigation symbols}{}
+\setbeameroption{hide notes}
 
 % --- TITLE INFORMATION ---
 \title[Fiabilite Cluster H100]{Analyse Stochastique de la Fiabilite d'un Cluster NVIDIA H100}
@@ -41,219 +44,373 @@
 % =========================
 % SLIDE 1
 % =========================
-\begin{frame}{Slide 1 -- Titre et Contexte}
+\begin{frame}{Slide 1 -- Title}
     \titlepage
-    \vspace{-0.4cm}
-    \begin{block}{Contexte}
-        Nous avons etudie la fiabilite d'un cluster NVIDIA H100 pour l'entrainement de LLMs: a grande echelle,
-        les pannes deviennent frequentes, donc il faut modeliser, predire et piloter les defaillances.
+    \vspace{-0.2cm}
+    \begin{block}{Short description}
+        Objectif: modeliser, estimer et optimiser la fiabilite d'un cluster GPU H100 avec un cadre probabiliste unifie.
     \end{block}
+    \begin{alertblock}{Resultat cle}
+        KPI principal observe: \textbf{MTTF \(\approx 78.93\) pas}.
+    \end{alertblock}
 \end{frame}
+\note{Je commence par le probleme global et le resultat le plus parlant: le temps moyen avant panne permanente.}
 
 % =========================
 % SLIDE 2
 % =========================
-\begin{frame}{Slide 2 -- Probleme Reel et Motivation}
+\begin{frame}{Slide 2 -- Problem \& Motivation}
 \begin{columns}[T]
-\begin{column}{0.54\textwidth}
+\begin{column}{0.55\textwidth}
 \begin{itemize}
-    \item Degradation thermique
-    \item Erreurs ECC
-    \item Evenements XID
-    \item Reboot / maintenance / panne
-    \item Impact direct sur uptime et interruption d'entrainement
+    \item Pannes frequentes en entrainement LLM a grande echelle.
+    \item Etat reel du GPU non observable directement.
+    \item On observe temperature, ECC, XID, puissance.
 \end{itemize}
-
-\vspace{0.2cm}
-Le cluster passe par des etats de sante \textit{latent}es, pas toujours observables directement.
-Les decisions de maintenance influencent fortement la disponibilite long terme.
+\textbf{Interpretation:} Sans modele probabiliste, la maintenance devient reactive et couteuse.
 \end{column}
-\begin{column}{0.46\textwidth}
+\begin{column}{0.45\textwidth}
 \centering
-\begin{tikzpicture}[node distance=0.7cm, scale=0.78, transform shape]
-\tikzstyle{box} = [rectangle, rounded corners, draw=coverblue, very thick, align=center, minimum width=3.0cm, minimum height=0.7cm]
-\node[box] (a) {GPU Cluster};
-\node[box, below=of a] (b) {Telemetry / Logs};
-\node[box, below=of b] (c) {Latent Health State};
-\node[box, below=of c] (d) {Decision Policy};
-\node[box, below=of d] (e) {Uptime / Performance};
-\draw[-{Latex[length=2mm]}] (a) -- (b);
-\draw[-{Latex[length=2mm]}] (b) -- (c);
-\draw[-{Latex[length=2mm]}] (c) -- (d);
-\draw[-{Latex[length=2mm]}] (d) -- (e);
+\begin{tikzpicture}[node distance=0.75cm, scale=0.8, transform shape]
+\tikzstyle{box}=[rectangle, rounded corners, draw=coverblue, very thick, align=center, minimum width=3.2cm, minimum height=0.65cm]
+\node[box] (h) {Hidden state};
+\node[box, below=of h] (o) {Observations};
+\node[box, below=of o] (d) {Decision};
+\draw[-{Latex[length=2mm]}] (h)--(o);
+\draw[-{Latex[length=2mm]}] (o)--(d);
 \end{tikzpicture}
 \end{column}
 \end{columns}
 \end{frame}
+\note{Je pose la motivation metier: etat cache, observations bruites, et besoin de decision robuste.}
 
 % =========================
 % SLIDE 3
 % =========================
-\begin{frame}{Slide 3 -- Formulation du Systeme}
-\begin{columns}[T]
-\begin{column}{0.5\textwidth}
-\begin{block}{Etats}
-Healthy, Degraded, MaintenanceRequired, FailedRecoverable, FailedPermanent
+\begin{frame}{Slide 3 -- DTMC Model}
+\begin{block}{Models discrete evolution of system states}
+Le DTMC decrit les transitions pas-a-pas entre Healthy, Degraded, MaintenanceRequired, FailedRecoverable et FailedPermanent.
 \end{block}
-\begin{block}{Observations}
-temperature, ECC count, XID code, utilization
-\end{block}
-\end{column}
-\begin{column}{0.5\textwidth}
-\begin{block}{Actions}
-keep\_running, power\_cap, reboot, isolate\_maintain
-\end{block}
-\begin{block}{Reward}
-uptime positif, panne negative, cout modere pour reboot/maintenance
-\end{block}
-\end{column}
-\end{columns}
-
-\vspace{0.2cm}
-\textbf{Message cle:} meme cas d'etude pour tous les modeles; seul le point de vue change
-(dynamique, etat cache, controle, controle sous observabilite partielle).
+\[
+P=\begin{pmatrix}
+0.90&0.06&0.02&0.01&0.01\\
+0.15&0.70&0.10&0.05&0.00\\
+0.40&0.00&0.40&0.15&0.05\\
+0.35&0.00&0.20&0.40&0.05\\
+0.00&0.00&0.00&0.00&1.00
+\end{pmatrix}
+\]
+\textbf{Interpretation:} Used to estimate failure dynamics de facon simple et interpretable.
 \end{frame}
+\note{Je presente la matrice comme la loi de dynamique de base qui alimente aussi les autres modeles.}
 
 % =========================
 % SLIDE 4
 % =========================
-\begin{frame}{Slide 4 -- Dynamique Markovienne: DTMC + CTMC}
-\begin{columns}[T]
-\begin{column}{0.52\textwidth}
-\textbf{DTMC (discret)}
+\begin{frame}{Slide 4 -- DTMC Result (IMPORTANT)}
+\begin{block}{MTTF result}
+\[
+\mathrm{MTTF}_{Healthy\rightarrow FailedPermanent} \approx 78.93\ \text{pas}
+\]
+\end{block}
 \begin{itemize}
-    \item Evolution pas a pas
-    \item Matrice de transition $P$
+    \item Mesure calculee depuis la matrice de transition executable.
+    \item C'est le temps moyen avant panne permanente.
 \end{itemize}
-
-\textbf{CTMC (continu)}
-\begin{itemize}
-    \item Evolution en temps reel
-    \item Matrice generatrice $A$
-\end{itemize}
-
-\vspace{0.2cm}
-\small
-On commence par une chaine discrete, puis on passe au continu pour mieux representer
-les durees de sejour et les taux de defaillance.
-\end{column}
-\begin{column}{0.48\textwidth}
-\begin{figure}
-\centering
-\includegraphics[width=\textwidth]{results/mandatory_plots/ct_reliability.png}
-\caption{Courbe de survie CTMC.}
-\end{figure}
-\end{column}
-\end{columns}
+\textbf{Interpretation:} Le systeme degrade progressivement avant defaillance finale.
 \end{frame}
+\note{Je donne une lecture concrete: ce chiffre resume le risque a long terme pour un GPU initialement sain.}
 
 % =========================
 % SLIDE 5
 % =========================
-\begin{frame}{Slide 5 -- HMM: Etat Cache et Observations}
-\begin{columns}[T]
-\begin{column}{0.54\textwidth}
-\begin{itemize}
-    \item L'etat reel du GPU n'est pas directement observable.
-    \item HMM: inference des etats latents a partir de la telemetrie.
-    \item \textbf{Forward}: probabilites a posteriori filtrees.
-    \item \textbf{Viterbi}: trajectoire latente la plus probable.
-    \item \textbf{Baum-Welch}: ajustement des parametres.
-\end{itemize}
-\end{column}
-\begin{column}{0.46\textwidth}
-\begin{figure}
-\centering
-\includegraphics[width=\textwidth]{results/mandatory_plots/hmm_forward_posterior.png}
-\caption{Posterieurs HMM (Forward).}
-\end{figure}
-\end{column}
-\end{columns}
-
-\small Quand une courbe est proche de 1, le modele est quasi certain de l'etat latent.
+\begin{frame}{Slide 5 -- CTMC Model}
+\begin{block}{Continuous-time modeling using transition rates}
+Le CTMC remplace les probabilites par des taux instantanes dans une matrice generatrice \(A\).
+\end{block}
+\[
+A=\begin{pmatrix}
+-0.10&0.06&0.02&0.01&0.01\\
+0.15&-0.30&0.10&0.05&0.00\\
+0.40&0.00&-0.60&0.15&0.05\\
+0.35&0.00&0.20&-0.60&0.05\\
+0.00&0.00&0.00&0.00&0.00
+\end{pmatrix}
+\]
+\textbf{Interpretation:} On modelise le temps reel, pas seulement des etapes discretes.
 \end{frame}
+\note{Je precise que CTMC est utile quand les evenements peuvent arriver a n'importe quel instant.}
 
 % =========================
 % SLIDE 6
 % =========================
-\begin{frame}{Slide 6 -- MDP + Reinforcement Learning}
+\begin{frame}{Slide 6 -- CTMC Result}
 \begin{columns}[T]
-\begin{column}{0.50\textwidth}
-\textbf{MDP (decision)}
+\begin{column}{0.52\textwidth}
 \begin{itemize}
-    \item state, action, transition, reward
-    \item politique optimale par value iteration
+    \item La probabilite de rester operationnel baisse avec le temps.
+    \item La courbe est issue de \(P(t)=e^{At}\).
 \end{itemize}
-
-\textbf{RL (apprentissage)}
-\begin{itemize}
-    \item Q-learning, SARSA
-    \item apprendre la meilleure action par interaction
-\end{itemize}
+\textbf{Interpretation:} Le risque cumule augmente meme sans choc brutal visible.
 \end{column}
-\begin{column}{0.50\textwidth}
-\begin{figure}
+\begin{column}{0.48\textwidth}
 \centering
-\includegraphics[width=\textwidth]{results/mandatory_plots/mdp_policy_matrix.png}
-\caption{Politique optimale MDP.}
-\end{figure}
+\includegraphics[width=\textwidth]{results/mandatory_plots/ct_reliability.png}
 \end{column}
 \end{columns}
 \end{frame}
+\note{Je lis la courbe en termes de survie: plus on avance en temps, plus la panne permanente devient probable.}
 
 % =========================
 % SLIDE 7
 % =========================
-\begin{frame}{Slide 7 -- Extensions: POMDP + Non-Markovien}
-\begin{columns}[T]
-\begin{column}{0.5\textwidth}
-\textbf{POMDP}
+\begin{frame}{Slide 7 -- Stationary Distribution}
+\begin{block}{Long-term behavior of system}
+\[
+\pi \approx (0.722,\ 0.144,\ 0.048,\ 0.054,\ 0.032)
+\]
+\[
+\text{Uptime long terme} \approx \pi_{Healthy}+\pi_{Degraded} \approx 0.866
+\]
+\end{block}
 \begin{itemize}
-    \item Decision sous incertitude
-    \item Politique sur une croyance probabiliste des etats
+    \item La distribution stationnaire resume le regime de long terme.
 \end{itemize}
-\begin{figure}
-\centering
-\includegraphics[width=0.95\textwidth]{results/sections/pomdp/pomdp_belief_entropy.png}
-\caption{Entropie de croyance.}
-\end{figure}
-\end{column}
-\begin{column}{0.5\textwidth}
-\textbf{Extension non-markovienne}
-\begin{itemize}
-    \item Le risque depend aussi de l'historique
-    \item Cumul ECC + age depuis maintenance
-\end{itemize}
-\begin{figure}
-\centering
-\includegraphics[width=0.95\textwidth]{results/mandatory_plots/non_markov_risk_multiplier.png}
-\caption{Multiplicateur de risque memoire.}
-\end{figure}
-\end{column}
-\end{columns}
+\textbf{Interpretation:} Le systeme reste operationnel la plupart du temps (environ 86\%).
 \end{frame}
+\note{Je donne l'idee: la stationnaire est un portrait global de fonctionnement a long horizon.}
 
 % =========================
 % SLIDE 8
 % =========================
-\begin{frame}{Slide 8 -- Resultats et Conclusion}
-\begin{block}{Resultats}
+\begin{frame}{Slide 8 -- HMM Concept}
+\begin{columns}[T]
+\begin{column}{0.56\textwidth}
 \begin{itemize}
-    \item Regime stationnaire: uptime long terme coherent entre DTMC et CTMC.
-    \item HMM: bonne identification des regimes latents.
-    \item MDP/RL: actions apprises coherentes avec la logique operationnelle.
-    \item Non-Markovien: effet net de l'historique d'usure.
+    \item Etat latent non directement observable.
+    \item Observations: temperature, ECC, XID, puissance.
+    \item HMM relie etat cache et mesures.
+\end{itemize}
+\textbf{Interpretation:} On transforme des signaux bruites en estimation de sante.
+\end{column}
+\begin{column}{0.44\textwidth}
+\centering
+\begin{tikzpicture}[node distance=0.9cm, scale=0.85, transform shape]
+\tikzstyle{c}=[circle, draw=coverblue, very thick, minimum size=8mm]
+\tikzstyle{o}=[rectangle, draw=coverblue, very thick, rounded corners, minimum width=1.8cm, minimum height=0.55cm]
+\node[c] (s1) {$S_{t-1}$};
+\node[c, right=of s1] (s2) {$S_t$};
+\node[o, below=of s2] (x) {$O_t$};
+\draw[-{Latex[length=2mm]}] (s1)--(s2);
+\draw[-{Latex[length=2mm]}] (s2)--(x);
+\end{tikzpicture}
+\end{column}
+\end{columns}
+\end{frame}
+\note{Je montre que l'observation n'est qu'un indice de l'etat reel, pas l'etat lui-meme.}
+
+% =========================
+% SLIDE 9
+% =========================
+\begin{frame}{Slide 9 -- Forward Algorithm}
+\begin{block}{Forward = probability / filtering}
+\[
+\alpha_t(j)=\left(\sum_i \alpha_{t-1}(i)a_{ij}\right)b_j(o_t)
+\]
+\[
+P(S_t=j\mid O_{1:t})=\frac{\alpha_t(j)}{\sum_k\alpha_t(k)}
+\]
+\end{block}
+\begin{itemize}
+    \item Calcule la croyance sur chaque etat a chaque instant.
+\end{itemize}
+\textbf{Interpretation:} Le Forward donne une probabilite, pas une classe unique.
+\end{frame}
+\note{Je souligne que le Forward sert au suivi en ligne et a la quantification d'incertitude.}
+
+% =========================
+% SLIDE 10
+% =========================
+\begin{frame}{Slide 10 -- Viterbi Algorithm}
+\begin{block}{Best path reconstruction}
+\[
+\hat{s}_{1:T}=\arg\max_{s_{1:T}} P(s_{1:T},o_{1:T})
+\]
+\end{block}
+\begin{itemize}
+    \item True state = ground truth simule.
+    \item Viterbi state = sequence inferee.
+\end{itemize}
+\textbf{Interpretation:} Viterbi reconstruit la trajectoire la plus plausible des etats caches.
+\end{frame}
+\note{Je distingue bien filtrage (Forward) et reconstruction globale (Viterbi).}
+
+% =========================
+% SLIDE 11
+% =========================
+\begin{frame}{Slide 11 -- HMM Result}
+\begin{columns}[T]
+\begin{column}{0.52\textwidth}
+\begin{itemize}
+    \item Posterior Forward suit les changements de regime.
+    \item true\_state et viterbi\_state sont proches dans les zones stables.
+\end{itemize}
+\textbf{Interpretation:} Le HMM reconstruit correctement les regimes latents dominants.
+\end{column}
+\begin{column}{0.48\textwidth}
+\centering
+\includegraphics[width=\textwidth]{results/mandatory_plots/hmm_forward_posterior.png}
+\end{column}
+\end{columns}
+\end{frame}
+\note{Je lis les pics de probabilite comme des moments de forte certitude diagnostique.}
+
+% =========================
+% SLIDE 12
+% =========================
+\begin{frame}{Slide 12 -- MDP Model}
+\begin{block}{Decision-making under uncertainty}
+\[
+V^*(s)=\max_a\left[R(s,a)+\gamma\sum_{s'}P(s'\mid s,a)V^*(s')\right]
+\]
+\end{block}
+\begin{itemize}
+    \item Le MDP choisit l'action qui maximise valeur immediate + valeur future.
+\end{itemize}
+\textbf{Interpretation:} Politique optimale = regle de decision par etat de sante.
+\end{frame}
+\note{Je presente Bellman comme une balance entre present et futur sous incertitude.}
+
+% =========================
+% SLIDE 13
+% =========================
+\begin{frame}{Slide 13 -- MDP Result (IMPORTANT)}
+\begin{block}{Policy table: state \(\rightarrow\) action}
+\begin{tabular}{ll}
+\toprule
+Etat & Action optimale \\
+\midrule
+Healthy & keep\_running \\
+Degraded & power\_cap \\
+MaintenanceRequired & isolate\_maintain \\
+FailedRecoverable & reboot \\
+FailedPermanent & isolate\_maintain \\
+\bottomrule
+\end{tabular}
+\end{block}
+\textbf{Interpretation:} Chaque etat a une action cible claire et operationnelle.
+\end{frame}
+\note{Je relie chaque action a une logique metier concrete de fiabilite.}
+
+% =========================
+% SLIDE 14
+% =========================
+\begin{frame}{Slide 14 -- Reinforcement Learning}
+\begin{block}{Learning without knowing the model exactly}
+\[
+Q(s,a)\leftarrow Q(s,a)+\alpha\left[r+\gamma\max_{a'}Q(s',a')-Q(s,a)\right]
+\]
+\end{block}
+\begin{itemize}
+    \item Q-learning et SARSA apprennent par interaction.
+    \item Pas besoin d'un modele parfait en entree.
+\end{itemize}
+\textbf{Interpretation:} RL complete le MDP quand le monde reel est partiellement connu.
+\end{frame}
+\note{Je rappelle que RL est utile quand les dynamiques reelles evoluent ou sont incompletes.}
+
+% =========================
+% SLIDE 15
+% =========================
+\begin{frame}{Slide 15 -- RL Results}
+\begin{columns}[T]
+\begin{column}{0.54\textwidth}
+\begin{tabular}{lc}
+\toprule
+Methode & Retour moyen \\
+\midrule
+Q-learning & 63.87 \\
+SARSA & 67.21 \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.2cm}
+\textbf{Interpretation:} L'agent apprend un comportement performant; SARSA est legerement meilleur ici.
+\end{column}
+\begin{column}{0.46\textwidth}
+\centering
+\includegraphics[width=\textwidth]{results/mandatory_plots/rl_convergence.png}
+\end{column}
+\end{columns}
+\end{frame}
+\note{Je commente la tendance globale plutot que les oscillations episode par episode.}
+
+% =========================
+% SLIDE 16
+% =========================
+\begin{frame}{Slide 16 -- POMDP / Non-Markov}
+\begin{block}{Handles uncertainty and memory}
+\[
+b_{t+1}(s')=\eta\,O(o_{t+1}\mid s',a_t)\sum_s T(s'\mid s,a_t)b_t(s)
+\]
+\[
+z_t=(\tau_t,c_t)\quad \text{(age + cumul ECC)}
+\]
+\end{block}
+\begin{itemize}
+    \item POMDP: decision sur croyance.
+    \item Non-Markov: le risque depend aussi de l'historique.
+\end{itemize}
+\textbf{Interpretation:} Plus d'incertitude et de memoire = politique plus prudente.
+\end{frame}
+\note{Je montre que cette extension rapproche le modele des conditions operationnelles reelles.}
+
+% =========================
+% SLIDE 17
+% =========================
+\begin{frame}{Slide 17 -- Final Insights}
+\begin{columns}[T]
+\begin{column}{0.55\textwidth}
+\begin{itemize}
+    \item DTMC/CTMC: dynamique de fiabilite.
+    \item HMM: estimation d'etat latent.
+    \item MDP/RL: decision et apprentissage.
+\end{itemize}
+\textbf{Interpretation:} Un seul pipeline: \textbf{DTMC \(\rightarrow\) HMM \(\rightarrow\) MDP \(\rightarrow\) RL}.
+\end{column}
+\begin{column}{0.45\textwidth}
+\centering
+\begin{tikzpicture}[node distance=0.65cm, scale=0.8, transform shape]
+\tikzstyle{b}=[rectangle, rounded corners, draw=coverblue, very thick, align=center, minimum width=2.5cm, minimum height=0.6cm]
+\node[b] (d) {DTMC / CTMC};
+\node[b, below=of d] (h) {HMM};
+\node[b, below=of h] (m) {MDP};
+\node[b, below=of m] (r) {RL};
+\draw[-{Latex[length=2mm]}] (d)--(h);
+\draw[-{Latex[length=2mm]}] (h)--(m);
+\draw[-{Latex[length=2mm]}] (m)--(r);
+\end{tikzpicture}
+\end{column}
+\end{columns}
+\end{frame}
+\note{Je termine l'histoire du projet: chaque bloc repond a une question differente mais complementaire.}
+
+% =========================
+% SLIDE 18
+% =========================
+\begin{frame}{Slide 18 -- Conclusion}
+\begin{block}{What we learned}
+\begin{itemize}
+    \item Fiabilite quantifiee: MTTF \(\approx 78.93\).
+    \item Etat latent estimable via HMM.
+    \item Decision robuste via MDP + RL.
 \end{itemize}
 \end{block}
-
-\begin{block}{Contributions}
-Cadre unifie, simulation coherente, et articulation entre modelisation, inference et controle.
-\end{block}
-
-\begin{alertblock}{Conclusion}
-L'apprentissage probabiliste est pertinent pour la fiabilite des clusters GPU H100.
-Prochaine etape: calibration sur telemetrie reelle et modeles plus profonds.
+\begin{alertblock}{Why this approach is powerful}
+Cadre unique, interpretable et extensible pour passer de la prediction a l'action.
 \end{alertblock}
+\textbf{Next step:} calibration sur telemetrie reelle DCGM/XID.
 \end{frame}
+\note{Message final simple: on sait modeliser, estimer et agir; la suite est la validation sur donnees reelles.}
 
 \end{document}
