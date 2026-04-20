@@ -10,3 +10,38 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# Data and datasets
+data/
+dataset/
+datasets/
+**/data/
+**/dataset/
+**/datasets/
+
+# Large model and training artifacts
+*.gguf
+*.arrow
+*.bin
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+*.onnx
+*.h5
+*.hdf5
+*.npz
+*.npy
+
+# Large archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+
+# Generated training outputs
+checkpoints/
+outputs/
+output/
+logs/

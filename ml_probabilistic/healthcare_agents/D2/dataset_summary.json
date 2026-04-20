@@ -1,0 +1,26 @@
+{
+  "dataset": "PathVQA",
+  "pipeline": "P1-Path",
+  "preprocessing": "CLAHE clipLimit=2.0 tileGrid=(8,8) \u2192 224\u00d7224",
+  "total": 32632,
+  "splits": {
+    "easy": {
+      "count": 16238,
+      "percentage": 49.8,
+      "unique_answers": 2,
+      "avg_words": 1.0
+    },
+    "medium": {
+      "count": 11854,
+      "percentage": 36.3,
+      "unique_answers": 1571,
+      "avg_words": 1.26
+    },
+    "hard": {
+      "count": 4540,
+      "percentage": 13.9,
+      "unique_answers": 3306,
+      "avg_words": 5.96
+    }
+  }
+}
