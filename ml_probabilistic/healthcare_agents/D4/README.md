@@ -35,6 +35,9 @@ This writes:
 - `outputs/gp1_summary_real.json` (or `outputs/gp1_summary_dryrun.json` in dry-run mode)
 - `outputs/dispatcher_kpi_report.json`
 - `outputs/dispatcher_eval_rows.csv`
+- `outputs/d5_handoff_manifest.json`
+
+For cross-team transfer details, see `HANDOFF_D5.md`.
 
 Default config now uses local-data mode with `model.backend: heuristic`.
 If you want to use D3 model inference, set `model.backend: d3` and keep `paths.d3_model_path` valid.

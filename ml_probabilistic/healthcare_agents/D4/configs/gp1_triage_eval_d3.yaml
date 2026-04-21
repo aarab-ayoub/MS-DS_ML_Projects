@@ -1,0 +1,43 @@
+project:
+  name: D4_GP1_Triage_Eval_D3
+  seed: 42
+
+paths:
+  d1_arrow_root: ../D1/dataset/vqa_rad_raw
+  d2_split_root: ../D2/data/splits
+  d3_encoder_module: ../D3_VLEncoder/agents/encoder.py
+  d3_model_path: ../D3_VLEncoder/models/qwen2.5-vl-3b-instruct-q4_k_m.gguf
+  output_dir: ./outputs/eval_d3
+
+model:
+  backend: d3
+  base_model: qwen2.5-vl-3b-instruct-q4_k_m.gguf
+  max_tokens: 128
+  temperature: 0.0
+  lora:
+    rank: 8
+    alpha: 16
+    target_modules: [q_proj, v_proj]
+
+data:
+  max_d1_per_split: 120
+  max_d2_per_difficulty: 160
+  max_examples_total: 120
+
+grpo:
+  group_rollouts: 1
+  clip_epsilon: 0.2
+  learning_rate: 0.0001
+  warmup_steps: 20
+
+reward:
+  format_weight: 0.25
+  route_weight: 0.50
+  stability_weight: 0.15
+  risk_weight: 0.10
+  confidence_threshold: 0.8
+
+train:
+  max_steps: 5
+  log_every: 5
+  dry_run: false

@@ -13,13 +13,16 @@ from __future__ import annotations
 
 import argparse
 import csv
+from dataclasses import dataclass
+from datetime import datetime, timezone
 import json
 import importlib.util
 import random
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from agents.triage_agent import ALLOWED_ROUTES, build_gp1_prompt, parse_gp1_output
+from agents.triage_agent import ALLOWED_ROUTES, normalize_route, parse_gp1_output
 from data.triage_dataset import load_real_examples
 from rl.reward_triage import RewardWeights, TriageExample, TriageRewardEngine, TriageRollout
 
@@ -74,8 +77,9 @@ def _flip_route(route: str) -> str:
     return "Pathologiste" if route == "Radiologue" else "Radiologue"
 
 
-def _keyword_route(question: str) -> str:
+def _keyword_route(question: str, source_dataset: Optional[str] = None) -> str:
     q = question.lower()
+    source = (source_dataset or "").strip().upper()
 
     radiology_terms = [
         "ct",
@@ -85,8 +89,13 @@ def _keyword_route(question: str) -> str:
         "ultrasound",
         "radiograph",
         "scan",
-        "lesion",
         "fracture",
+        "hemorrhage",
+        "pneumothorax",
+        "consolidation",
+        "effusion",
+        "opacity",
+        "edema",
     ]
     pathology_terms = [
         "histology",
@@ -97,10 +106,28 @@ def _keyword_route(question: str) -> str:
         "cell",
         "nuclei",
         "biopsy",
+        "carcinoma",
+        "adenocarcinoma",
+        "tumor",
+        "stain",
+        "immunohistochemical",
+        "cytokeratin",
+        "hyperplasia",
+        "atypia",
+        "glandular",
+        "necrosis",
+        "metastatic",
+        "serosa",
+        "muscularis",
     ]
 
     rad_score = sum(term in q for term in radiology_terms)
     path_score = sum(term in q for term in pathology_terms)
+
+    # Lightweight source prior helps ambiguous questions route correctly.
+    # D1 is radiology-heavy and D2 is pathology-heavy in this project setup.
+    rad_score += 1 if source == "D1" else 0
+    path_score += 1 if source == "D2" else 0
 
     if path_score > rad_score:
         return "Pathologiste"
@@ -112,7 +139,7 @@ def _keyword_route(question: str) -> str:
 
 
 def _heuristic_tagged_output(example: TriageExample, rollout_id: int) -> str:
-    pred = _keyword_route(example.question)
+    pred = _keyword_route(example.question, source_dataset=example.source_dataset)
     if rollout_id > 0 and random.random() < 0.08:
         pred = _flip_route(pred)
 
@@ -121,6 +148,51 @@ def _heuristic_tagged_output(example: TriageExample, rollout_id: int) -> str:
         "<think>Routing based on modality hints and question semantics.</think>\n"
         f"<answer>{pred}</answer>\n"
         f"<confidence>{confidence:.2f}</confidence>"
+    )
+
+
+_ROUTE_TEXT_PATTERN = re.compile(
+    r"\b(radiologue|radiologist|radiology|pathologiste|pathologist|pathology)\b",
+    re.IGNORECASE,
+)
+_CONF_PERCENT_PATTERN = re.compile(r"(\d{1,3})(?:\.(\d+))?\s*%")
+_CONF_FLOAT_PATTERN = re.compile(r"\b0(?:\.\d+)?\b|\b1(?:\.0+)?\b")
+
+
+def _extract_route_from_free_text(text: str) -> Optional[str]:
+    match = _ROUTE_TEXT_PATTERN.search(text)
+    if not match:
+        return None
+
+    candidate = normalize_route(match.group(1))
+    return candidate
+
+
+def _extract_confidence_from_free_text(text: str) -> float:
+    percent_match = _CONF_PERCENT_PATTERN.search(text)
+    if percent_match:
+        value = float(percent_match.group(0).replace("%", "").strip()) / 100.0
+        return max(0.0, min(1.0, value))
+
+    float_match = _CONF_FLOAT_PATTERN.search(text)
+    if float_match:
+        value = float(float_match.group(0))
+        return max(0.0, min(1.0, value))
+
+    return 0.60
+
+
+def _build_d3_route_prompt(question: str, image_ref: str) -> str:
+    return (
+        "You are a medical triage classifier.\n"
+        "Choose exactly one route from: Radiologue, Pathologiste.\n"
+        "Do not answer the medical diagnosis itself.\n"
+        "Return with this exact template only:\n"
+        "<think>short routing rationale</think>\n"
+        "<answer>Radiologue or Pathologiste</answer>\n"
+        "<confidence>0.00 to 1.00</confidence>\n"
+        f"Image reference: {image_ref}\n"
+        f"Question: {question}\n"
     )
 
 
@@ -174,33 +246,67 @@ class RolloutGenerator:
         elif self.backend != "heuristic":
             raise ValueError(f"Unsupported backend '{self.backend}'. Use 'heuristic' or 'd3'.")
 
-    def generate(self, example: TriageExample, rollout_id: int) -> str:
+    def generate(self, example: TriageExample, rollout_id: int) -> GeneratedRollout:
         image_ref = example.image_ref or f"{example.sample_id}.jpg"
-        prompt = build_gp1_prompt(question=example.question, image_ref=image_ref)
+        d3_prompt = _build_d3_route_prompt(question=example.question, image_ref=image_ref)
 
         if self.backend == "heuristic":
-            return _heuristic_tagged_output(example=example, rollout_id=rollout_id)
+            return GeneratedRollout(
+                text=_heuristic_tagged_output(example=example, rollout_id=rollout_id),
+                route_source="heuristic",
+            )
 
         assert self.encoder is not None
         image_input = example.image_path or image_ref
         output_text = self.encoder.encode(
             image_path=image_input,
-            question=prompt,
+            question=d3_prompt,
             max_tokens=self.max_tokens,
             temperature=self.temperature,
         )
 
-        # Keep training robust even if D3 output drifts from strict tags.
-        if parse_gp1_output(output_text) is None:
-            fallback_route = _keyword_route(example.question)
-            fallback_conf = 0.55
-            return (
-                "<think>D3 output fallback: enforcing GP1 contract.</think>\n"
-                f"<answer>{fallback_route}</answer>\n"
-                f"<confidence>{fallback_conf:.2f}</confidence>"
+        parsed = parse_gp1_output(output_text)
+        if parsed is not None:
+            return GeneratedRollout(
+                text=output_text,
+                route_source="d3_tagged",
+                raw_model_text=output_text,
             )
 
-        return output_text
+        extracted_route = _extract_route_from_free_text(output_text)
+        if extracted_route is not None:
+            extracted_conf = _extract_confidence_from_free_text(output_text)
+            normalized_text = (
+                "<think>D3 free-text route normalization.</think>\n"
+                f"<answer>{extracted_route}</answer>\n"
+                f"<confidence>{extracted_conf:.2f}</confidence>"
+            )
+            return GeneratedRollout(
+                text=normalized_text,
+                route_source="d3_normalized",
+                raw_model_text=output_text,
+            )
+
+        # Keep training robust if D3 output contains no route signal.
+        fallback_route = _keyword_route(example.question, source_dataset=example.source_dataset)
+        fallback_conf = 0.55
+        fallback_text = (
+            "<think>D3 output fallback: enforcing GP1 contract.</think>\n"
+            f"<answer>{fallback_route}</answer>\n"
+            f"<confidence>{fallback_conf:.2f}</confidence>"
+        )
+        return GeneratedRollout(
+            text=fallback_text,
+            route_source="heuristic_fallback",
+            raw_model_text=output_text,
+        )
+
+
+@dataclass(frozen=True)
+class GeneratedRollout:
+    text: str
+    route_source: str
+    raw_model_text: Optional[str] = None
 
 
 def compute_route_stability(routes: List[str]) -> float:
@@ -322,6 +428,7 @@ def _write_eval_csv(eval_rows: List[Dict[str, Any]], output_path: Path) -> None:
         "difficulty",
         "gold_route",
         "pred_route",
+        "route_source",
         "parse_ok",
         "confidence",
         "route_stability",
@@ -337,6 +444,50 @@ def _write_eval_csv(eval_rows: List[Dict[str, Any]], output_path: Path) -> None:
         writer.writeheader()
         for row in eval_rows:
             writer.writerow({name: row.get(name) for name in fieldnames})
+
+
+def _build_handoff_manifest(
+    *,
+    config: Dict[str, Any],
+    summary: Dict[str, Any],
+    kpis: Dict[str, Any],
+    artifact_paths: Dict[str, str],
+) -> Dict[str, Any]:
+    return {
+        "handoff_version": "1.0",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "task": "D4 GP1 Triage",
+        "summary": summary,
+        "kpi_overview": {
+            "overall": kpis.get("overall", {}),
+            "per_source": kpis.get("per_source", {}),
+            "per_difficulty": kpis.get("per_difficulty", {}),
+        },
+        "contracts": {
+            "allowed_routes": sorted(ALLOWED_ROUTES),
+            "d1_expected_route": "Radiologue",
+            "d2_expected_route": "Pathologiste",
+            "route_sources": [
+                "heuristic",
+                "d3_tagged",
+                "d3_normalized",
+                "heuristic_fallback",
+            ],
+        },
+        "artifacts": artifact_paths,
+        "config_snapshot": {
+            "model": config.get("model", {}),
+            "data": config.get("data", {}),
+            "grpo": config.get("grpo", {}),
+            "reward": config.get("reward", {}),
+            "train": config.get("train", {}),
+        },
+        "d5_handoff_notes": [
+            "Use pred_route to dispatch cases to specialist fine-tuning branches.",
+            "Use route_source to monitor whether route came from D3 or fallback logic.",
+            "Use per_difficulty KPI to prioritize weak slices before final integration.",
+        ],
+    }
 
 
 def _resolve_real_examples(config: Dict[str, Any], project_root: Path) -> List[TriageExample]:
@@ -410,9 +561,11 @@ def run_training(config: Dict[str, Any], project_root: Path) -> Dict[str, Any]:
 
         routes: List[str] = []
         first_rollout: TriageRollout | None = None
+        first_route_source = "unknown"
 
         for rollout_id in range(group_rollouts):
-            raw_text = generator.generate(example, rollout_id)
+            generated = generator.generate(example, rollout_id)
+            raw_text = generated.text
             parsed = parse_gp1_output(raw_text)
 
             if parsed is None:
@@ -427,6 +580,7 @@ def run_training(config: Dict[str, Any], project_root: Path) -> Dict[str, Any]:
 
             if first_rollout is None:
                 first_rollout = rollout
+                first_route_source = generated.route_source
 
         assert first_rollout is not None
         stability = compute_route_stability(routes)
@@ -441,6 +595,7 @@ def run_training(config: Dict[str, Any], project_root: Path) -> Dict[str, Any]:
                 "difficulty": example.difficulty,
                 "gold_route": example.gold_route,
                 "pred_route": first_rollout.predicted_route,
+                "route_source": first_route_source,
                 "parse_ok": first_rollout.parse_ok,
                 "confidence": first_rollout.confidence,
                 "route_stability": stability,
@@ -462,6 +617,7 @@ def run_training(config: Dict[str, Any], project_root: Path) -> Dict[str, Any]:
                         "difficulty": example.difficulty,
                         "gold_route": example.gold_route,
                         "pred_route": first_rollout.predicted_route,
+                        "route_source": first_route_source,
                         "reward": reward_map,
                     }
                 )
@@ -518,9 +674,23 @@ def main() -> None:
     csv_path = output_dir / "dispatcher_eval_rows.csv"
     _write_eval_csv(eval_rows=eval_rows, output_path=csv_path)
 
+    manifest_path = output_dir / "d5_handoff_manifest.json"
+    manifest = _build_handoff_manifest(
+        config=config,
+        summary=summary,
+        kpis=kpis,
+        artifact_paths={
+            "summary": str(summary_path),
+            "kpi_report": str(kpi_path),
+            "eval_rows_csv": str(csv_path),
+        },
+    )
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
     print(f"Saved summary to: {summary_path}")
     print(f"Saved KPI report to: {kpi_path}")
     print(f"Saved eval rows CSV to: {csv_path}")
+    print(f"Saved D5 handoff manifest to: {manifest_path}")
 
 
 if __name__ == "__main__":
