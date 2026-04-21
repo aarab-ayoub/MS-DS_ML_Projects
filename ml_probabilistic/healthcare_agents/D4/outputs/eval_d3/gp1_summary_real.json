@@ -1,0 +1,10 @@
+{
+  "mode": "real_data",
+  "backend": "d3",
+  "num_examples": 120,
+  "steps": 5,
+  "group_rollouts": 1,
+  "avg_reward": 0.54,
+  "min_reward": -0.15000000000000002,
+  "max_reward": 1.0
+}

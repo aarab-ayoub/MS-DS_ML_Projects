@@ -1,0 +1,10 @@
+{
+  "mode": "real_data",
+  "backend": "heuristic",
+  "num_examples": 500,
+  "steps": 40,
+  "group_rollouts": 4,
+  "avg_reward": 0.89875,
+  "min_reward": -0.15000000000000002,
+  "max_reward": 1.0
+}

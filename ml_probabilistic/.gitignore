@@ -42,6 +42,6 @@ datasets/
 
 # Generated training outputs
 checkpoints/
-outputs/
+# outputs/
 output/
 logs/

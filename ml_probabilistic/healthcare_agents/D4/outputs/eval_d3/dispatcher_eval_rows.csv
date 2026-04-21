@@ -1,0 +1,6 @@
+step,sample_id,source,difficulty,gold_route,pred_route,route_source,parse_ok,confidence,route_stability,reward_total,r_format,r_route,r_stability,r_risk
+1,d2_easy_08484,D2,easy,Pathologiste,Pathologiste,d3_tagged,True,0.95,1.0,1.0,1.0,1.0,1.0,1.0
+2,d2_easy_11716,D2,easy,Pathologiste,Radiologue,d3_tagged,True,0.95,1.0,-0.15000000000000002,1.0,-1.0,1.0,-0.5
+3,d2_medium_09768,D2,medium,Pathologiste,Pathologiste,d3_tagged,True,0.95,1.0,1.0,1.0,1.0,1.0,1.0
+4,d1_test_00324,D1,medium,Radiologue,Radiologue,d3_tagged,True,0.95,1.0,1.0,1.0,1.0,1.0,1.0
+5,d2_easy_14847,D2,easy,Pathologiste,Radiologue,d3_tagged,True,0.8,1.0,-0.15000000000000002,1.0,-1.0,1.0,-0.5

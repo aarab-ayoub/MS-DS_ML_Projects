@@ -1,0 +1,132 @@
+{
+  "handoff_version": "1.0",
+  "generated_at_utc": "2026-04-21T00:08:58.532568+00:00",
+  "task": "D4 GP1 Triage",
+  "summary": {
+    "mode": "real_data",
+    "backend": "heuristic",
+    "num_examples": 500,
+    "steps": 40,
+    "group_rollouts": 4,
+    "avg_reward": 0.89875,
+    "min_reward": -0.15000000000000002,
+    "max_reward": 1.0
+  },
+  "kpi_overview": {
+    "overall": {
+      "total": 40,
+      "parsed": 40,
+      "correct": 37,
+      "parse_rate": 1.0,
+      "accuracy_overall": 0.925,
+      "accuracy_on_parsed": 0.925
+    },
+    "per_source": {
+      "D1": {
+        "total": 14,
+        "parsed": 14,
+        "correct": 14,
+        "parse_rate": 1.0,
+        "accuracy_overall": 1.0,
+        "accuracy_on_parsed": 1.0
+      },
+      "D2": {
+        "total": 26,
+        "parsed": 26,
+        "correct": 23,
+        "parse_rate": 1.0,
+        "accuracy_overall": 0.8846153846153846,
+        "accuracy_on_parsed": 0.8846153846153846
+      }
+    },
+    "per_difficulty": {
+      "easy": {
+        "total": 9,
+        "parsed": 9,
+        "correct": 8,
+        "parse_rate": 1.0,
+        "accuracy_overall": 0.8888888888888888,
+        "accuracy_on_parsed": 0.8888888888888888
+      },
+      "hard": {
+        "total": 7,
+        "parsed": 7,
+        "correct": 6,
+        "parse_rate": 1.0,
+        "accuracy_overall": 0.8571428571428571,
+        "accuracy_on_parsed": 0.8571428571428571
+      },
+      "medium": {
+        "total": 24,
+        "parsed": 24,
+        "correct": 23,
+        "parse_rate": 1.0,
+        "accuracy_overall": 0.9583333333333334,
+        "accuracy_on_parsed": 0.9583333333333334
+      }
+    }
+  },
+  "contracts": {
+    "allowed_routes": [
+      "Pathologiste",
+      "Radiologue"
+    ],
+    "d1_expected_route": "Radiologue",
+    "d2_expected_route": "Pathologiste",
+    "route_sources": [
+      "heuristic",
+      "d3_tagged",
+      "d3_normalized",
+      "heuristic_fallback"
+    ]
+  },
+  "artifacts": {
+    "summary": "/Users/ayoub/work/MS-DS_ML_Projects/ml_probabilistic/healthcare_agents/D4/outputs/gp1_summary_real.json",
+    "kpi_report": "/Users/ayoub/work/MS-DS_ML_Projects/ml_probabilistic/healthcare_agents/D4/outputs/dispatcher_kpi_report.json",
+    "eval_rows_csv": "/Users/ayoub/work/MS-DS_ML_Projects/ml_probabilistic/healthcare_agents/D4/outputs/dispatcher_eval_rows.csv"
+  },
+  "config_snapshot": {
+    "model": {
+      "backend": "heuristic",
+      "base_model": "qwen2.5-vl-3b-instruct-q4_k_m.gguf",
+      "max_tokens": 128,
+      "temperature": 0.0,
+      "lora": {
+        "rank": 8,
+        "alpha": 16,
+        "target_modules": [
+          "q_proj",
+          "v_proj"
+        ]
+      }
+    },
+    "data": {
+      "max_d1_per_split": 120,
+      "max_d2_per_difficulty": 160,
+      "max_examples_total": 500
+    },
+    "grpo": {
+      "group_rollouts": 4,
+      "clip_epsilon": 0.2,
+      "learning_rate": 0.0001,
+      "warmup_steps": 20
+    },
+    "reward": {
+      "format_weight": 0.25,
+      "route_weight": 0.5,
+      "stability_weight": 0.15,
+      "risk_weight": 0.1,
+      "confidence_threshold": 0.8
+    },
+    "train": {
+      "max_steps": 40,
+      "log_every": 5,
+      "dry_run": false
+    }
+  },
+  "d5_handoff_notes": [
+    "Use pred_route to dispatch cases to specialist fine-tuning branches.",
+    "Use route_source to monitor whether route came from D3 or fallback logic.",
+    "Use per_difficulty KPI to prioritize weak slices before final integration."
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "overall": {
+    "total": 5,
+    "parsed": 5,
+    "correct": 3,
+    "parse_rate": 1.0,
+    "accuracy_overall": 0.6,
+    "accuracy_on_parsed": 0.6
+  },
+  "predicted_distribution": {
+    "Pathologiste": 2,
+    "Radiologue": 3,
+    "UNPARSEABLE": 0
+  },
+  "confusion_matrix": {
+    "Pathologiste": {
+      "Pathologiste": 2,
+      "Radiologue": 2,
+      "UNPARSEABLE": 0
+    },
+    "Radiologue": {
+      "Pathologiste": 0,
+      "Radiologue": 1,
+      "UNPARSEABLE": 0
+    }
+  },
+  "per_source": {
+    "D1": {
+      "total": 1,
+      "parsed": 1,
+      "correct": 1,
+      "parse_rate": 1.0,
+      "accuracy_overall": 1.0,
+      "accuracy_on_parsed": 1.0
+    },
+    "D2": {
+      "total": 4,
+      "parsed": 4,
+      "correct": 2,
+      "parse_rate": 1.0,
+      "accuracy_overall": 0.5,
+      "accuracy_on_parsed": 0.5
+    }
+  },
+  "per_difficulty": {
+    "easy": {
+      "total": 3,
+      "parsed": 3,
+      "correct": 1,
+      "parse_rate": 1.0,
+      "accuracy_overall": 0.3333333333333333,
+      "accuracy_on_parsed": 0.3333333333333333
+    },
+    "medium": {
+      "total": 2,
+      "parsed": 2,
+      "correct": 2,
+      "parse_rate": 1.0,
+      "accuracy_overall": 1.0,
+      "accuracy_on_parsed": 1.0
+    }
+  },
+  "reward_stats": {
+    "avg_reward_total": 0.54,
+    "avg_route_stability": 1.0
+  }
+}
