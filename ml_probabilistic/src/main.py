@@ -3,6 +3,9 @@ from __future__ import annotations
 import argparse
 import os
 
+import pandas as pd
+
+from .core.config import STATES
 from .core.config import ProjectConfig
 from .pipeline.experiments import run_all, summarize
 from .pipeline.plots import plot_ct_reliability, plot_learning_curves, plot_state_counts
@@ -12,6 +15,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="GPU cluster probabilistic reliability project")
     parser.add_argument("--mode", choices=["quick", "full"], default="quick")
     parser.add_argument("--out", default="../results")
+    parser.add_argument("--dataset-path", default="../data/real")
+    parser.add_argument("--extract-dir", default=None)
     parser.add_argument("--horizon-steps", type=int, default=None)
     parser.add_argument("--ct-hours", type=float, default=None)
     parser.add_argument("--rl-episodes", type=int, default=None)
@@ -41,7 +46,12 @@ def main() -> None:
     if args.td_eval_episodes is not None:
         cfg.td_eval_episodes = args.td_eval_episodes
 
-    results = run_all(cfg)
+    results = run_all(
+        cfg,
+        dataset_path=args.dataset_path,
+        extract_dir=args.extract_dir,
+        enable_ctmc_estimation=True,
+    )
 
     out_dir = os.path.abspath(args.out)
     os.makedirs(out_dir, exist_ok=True)
@@ -49,6 +59,10 @@ def main() -> None:
     summary = summarize(results)
     summary_path = os.path.join(out_dir, "summary.csv")
     summary.to_csv(summary_path, index=False)
+    results["processed_df"].to_csv(os.path.join(out_dir, "processed_dataset.csv"), index=False)
+    pd.DataFrame(results["empirical_transition"], index=STATES, columns=STATES).to_csv(
+        os.path.join(out_dir, "transition_matrix.csv")
+    )
 
     plot_state_counts(results["dt_trace"], os.path.join(out_dir, "state_counts.png"))
     plot_ct_reliability(results["ct_time_grid"], results["ct_probabilities"], os.path.join(out_dir, "ct_reliability.png"))

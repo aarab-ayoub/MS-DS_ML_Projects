@@ -1,0 +1,8 @@
+metric,value
+DTMC_MTTF_from_Healthy_steps,134.08369398294752
+Mean_Q_learning_return,71.26400000000001
+Mean_SARSA_return,67.7626666666667
+Mean_R_learning_return,0.40536128354888346
+R_learning_rho,3720.149641396105
+TD0_V_Healthy,16.698947459775926
+TDlambda_V_Healthy,14.93247408399092

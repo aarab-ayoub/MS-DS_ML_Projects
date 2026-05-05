@@ -1,16 +1,16 @@
 from __future__ import annotations
 
+import logging
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
 from ..core.config import (
     ACTIONS,
     ACTION_EFFECTS,
-    BASE_GENERATOR,
-    BASE_TRANSITION,
     ProjectConfig,
     STATES,
-    build_generator,
 )
 from ..models.ctmc import trajectory
 from ..models.dtmc import expected_steps_to_absorption
@@ -18,7 +18,12 @@ from ..models.hmm_continuous import ct_hmm_filter
 from ..models.hmm_discrete import forward_filter, viterbi
 from ..models.mdp import value_iteration
 from ..models.rl import RLEnv, q_learning, r_learning, sarsa, td0_policy_evaluation, td_lambda_policy_evaluation
-from .simulated_data import generate_ctmc_trace, generate_dtmc_trace
+from .data_loader import load_real_dataset
+from .preprocessing import preprocess_real_dataframe
+from .state_mapping import add_state_columns
+from .transition_estimation import estimate_generator_matrix, estimate_transition_matrix
+
+logger = logging.getLogger(__name__)
 
 
 #cette fonction génère les matrices de transition pour chaque action en appliquant les effets d'action définis dans ACTION_EFFECTS.
@@ -51,45 +56,83 @@ def _build_rewards(n_actions: int, n_states: int) -> np.ndarray:
     return rewards
 
 
-def run_all(cfg: ProjectConfig) -> dict:
+def run_all(
+    cfg: ProjectConfig,
+    *,
+    dataset_path: str | Path = "data/real",
+    extract_dir: str | Path | None = None,
+    enable_ctmc_estimation: bool = True,
+) -> dict:
     out = {}
 
-    df_dt = generate_dtmc_trace(cfg)
-    df_ct = generate_ctmc_trace(cfg)
+    project_root = Path(__file__).resolve().parents[2]
+    dataset_path = Path(dataset_path)
+    if not dataset_path.is_absolute():
+        dataset_path = (project_root / dataset_path).resolve()
+    if extract_dir is None:
+        extract_dir_path = dataset_path / "extracted"
+    else:
+        extract_dir_path = Path(extract_dir)
+        if not extract_dir_path.is_absolute():
+            extract_dir_path = (project_root / extract_dir_path).resolve()
+
+    df_raw = load_real_dataset(
+        project_root=project_root,
+        dataset_path=dataset_path,
+        extract_dir=extract_dir_path,
+        extract_tars=True,
+    )
+    df_proc = preprocess_real_dataframe(df_raw)
+    df_dt = add_state_columns(df_proc)
+    out["raw_df"] = df_raw
+    out["processed_df"] = df_dt
     out["dt_trace"] = df_dt
-    out["ct_trace"] = df_ct
+    out["ct_trace"] = df_dt.copy()
+
+    p_emp = estimate_transition_matrix(df_dt)
+    out["empirical_transition"] = p_emp
 
     transient = [0, 1, 2, 3]
-    mttf_steps = expected_steps_to_absorption(BASE_TRANSITION, transient)
+    mttf_steps = expected_steps_to_absorption(p_emp, transient)
     out["dt_mttf_steps_from_states"] = mttf_steps
 
+    # DTMC/HMM prior from first observed state.
     pi0 = np.array([1.0, 0.0, 0.0, 0.0, 0.0])
-    a = build_generator(BASE_GENERATOR)
+    first_state = int(df_dt["state_idx"].iloc[0])
+    pi0[:] = 0.0
+    pi0[first_state] = 1.0
+
+    if enable_ctmc_estimation:
+        q_emp = estimate_generator_matrix(df_dt)
+    else:
+        q_emp = np.zeros((len(STATES), len(STATES)), dtype=float)
+    out["generator_matrix"] = q_emp
+
     time_grid = np.linspace(0.0, cfg.ctmc_horizon_hours, 200)
-    pi_t = trajectory(pi0, a, time_grid)
+    pi_t = trajectory(pi0, q_emp, time_grid)
     out["ct_time_grid"] = time_grid
     out["ct_probabilities"] = pi_t
 
     observations = df_dt[["temperature", "ecc_count", "xid_code", "utilization", "power_usage", "retired_pages"]].to_dict(
         orient="records"
     )
-    path = viterbi(observations, BASE_TRANSITION, pi0)
-    post = forward_filter(observations, BASE_TRANSITION, pi0)
+    path = viterbi(observations, p_emp, pi0)
+    post = forward_filter(observations, p_emp, pi0)
     out["hmm_path"] = path
     out["hmm_post"] = post
 
-    if not df_ct.empty:
-        ct_obs = df_ct[["temperature", "ecc_count", "xid_code", "utilization", "power_usage", "retired_pages"]].to_dict(
+    if not df_dt.empty:
+        ct_obs = df_dt[["temperature", "ecc_count", "xid_code", "utilization", "power_usage", "retired_pages"]].to_dict(
             orient="records"
         )
-        ct_times = df_ct["time_hours"].tolist()
-        out["ct_hmm_post"] = ct_hmm_filter(ct_obs, ct_times, a, pi0)
+        ct_times = df_dt["time_hours"].tolist()
+        out["ct_hmm_post"] = ct_hmm_filter(ct_obs, ct_times, q_emp, pi0)
     else:
         out["ct_hmm_post"] = np.empty((0, len(STATES)))
 
     n_actions = len(ACTIONS)
     n_states = len(STATES)
-    transitions = _build_action_transitions(BASE_TRANSITION, n_actions)
+    transitions = _build_action_transitions(p_emp, n_actions)
     rewards = _build_rewards(n_actions, n_states)
     out["mdp_transitions"] = transitions
     out["mdp_rewards"] = rewards
